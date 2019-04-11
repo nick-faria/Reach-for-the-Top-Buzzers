@@ -17,6 +17,8 @@
 int my_team = 0,
     my_player_number = 0;
 
+bool can_be_pressed = true;
+
 /* pins */
 enum Pins
 {
@@ -57,10 +59,10 @@ void setup()
 
   /* radio configuration */
   radio.setPALevel(RF24_PA_MIN);
-  radio.startListening();
-
-  /* enable auto-acknowledge */
   radio.setAutoAck(true);
+  radio.setRetries(0,15);
+
+  radio.startListening();
 
   Serial.println("Initialized");
 
@@ -90,7 +92,7 @@ void loop()
       /* mark a new question */
       case OP_NEW_QUESTION:
        {Serial.println("New Question");
-        // TODO
+        can_be_pressed = true;
        }break;
 
       /* write to a register */
@@ -129,10 +131,16 @@ void loop()
   /* detect events on this button */
   if (digitalRead(PIN_BUTTON) == LOW)
   {
-    Serial.println("button is pressed!");
-    ButtonEvent event(my_team, my_player_number);
+    if (can_be_pressed)
+    {
+      Serial.println("button is pressed!");
+      ButtonEvent event(my_team, my_player_number);
 
-    send_message(radio, parent_name, event);
+      while (send_message(radio, parent_name, event) == false)
+      {
+      }
+      can_be_pressed = false;
+    }
   }
 
 

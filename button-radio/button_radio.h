@@ -16,7 +16,7 @@
 enum ID_Types
 {
   ID_INSTRUCTION  = 0x00,
-  ID_BUTTON_EVENT = 0x01,
+  ID_BUTTON_EVENT,
 };
 
 /* Opcodes:
@@ -25,7 +25,7 @@ enum ID_Types
 enum Opcodes
 {
   OP_NEW_QUESTION   = 0x00,
-  OP_WRITE_REGISTER = 0x01,
+  OP_WRITE_REGISTER,
 };
 
 /* Registers:
@@ -34,8 +34,8 @@ enum Opcodes
 enum Registers
 {
   REG_LIGHT  = 0x00,
-  REG_SOUND  = 0x01,
-  REG_ENABLE = 0x02,
+  REG_SOUND,
+  REG_ENABLE,
 
   REGISTER_COUNT,  /* dummy, counts how many registers there are */
 };
@@ -66,7 +66,7 @@ public:
 
   ButtonEvent(int _team, int _player)
  : time_ms(millis()),
-   time_us(micros()),
+   time_us(micros() % 1000),
    team(_team),
    player(_player)
   {
@@ -95,8 +95,8 @@ public:
 /* ==[ FUNCTIONS ]== */
 void error(char const *const format, ...);
 
-void send_message(RF24 radio, byte const addr[6], Instruction inst);
-void send_message(RF24 radio, byte const addr[6], ButtonEvent event);
+bool send_message(RF24 radio, byte const addr[6], Instruction inst);
+bool send_message(RF24 radio, byte const addr[6], ButtonEvent event);
 
 
 #endif

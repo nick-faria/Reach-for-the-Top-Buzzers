@@ -26,6 +26,10 @@ byte const my_name[6] = "NODE0";
 byte const child_name[6] = "CHILD";
 
 
+/* ==[ FUNCTIONS ]== */
+void receive_messages(void);
+
+
 
 /* setup: initialization */
 void setup()
@@ -41,6 +45,9 @@ void setup()
 
   /* radio configuration */
   radio.setPALevel(RF24_PA_MIN);
+  radio.setAutoAck(true);
+  radio.setRetries(0,15);
+
   radio.startListening();
 }
 
@@ -51,6 +58,26 @@ int delta = -8;
 void loop()
 {
   /* check if a message is available */
+  unsigned long start = millis();
+  while (millis() - start < 50)
+  { receive_messages();
+  }
+
+  Instruction inst(OP_WRITE_REGISTER);
+  inst.data[0] = REG_SOUND;
+  inst.data[1] = i;
+  bool success = send_message(radio, child_name, inst);
+  Serial.print(success);
+
+  if (i == 0xFE || i == 0x00)
+  { delta *= -1;
+  }
+  i += delta;
+}
+
+/* receive_messages:  */
+void receive_messages(void)
+{
   while (radio.available())
   {
     char msg[32] = "";
@@ -78,24 +105,13 @@ void loop()
       Serial.print("ms, ");
       Serial.print(e.time_us);
       Serial.println("us");
+
+      Instruction inst2(OP_NEW_QUESTION);
+      while (send_message(radio, child_name, inst2) == false)
+      {
+      }
       break;
     }
   }
-
-  Instruction inst(OP_WRITE_REGISTER);
-  inst.data[0] = REG_SOUND;
-  inst.data[1] = i;
-  send_message(radio, child_name, inst);
-
-  Instruction inst2(OP_NEW_QUESTION);
-  send_message(radio, child_name, inst2);
-
-
-  if (i == 0xFE || i == 0x00)
-  { delta *= -1;
-  }
-  i += delta;
-
-  delay(50);
 }
 

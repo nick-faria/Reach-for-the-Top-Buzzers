@@ -16,7 +16,9 @@
 
 
 
-void send_bytes(RF24 radio, byte const addr[6], byte const data[32]);
+byte *create_message(Instruction instr);
+byte *create_message(ButtonEvent event);
+bool send_bytes(RF24 radio, byte const addr[6], byte const data[32]);
 
 
 
@@ -41,9 +43,27 @@ void error(char const *const format, ...)
 }
 
 /* send_message(Instruction):  */
-void send_message(RF24 radio, byte const addr[6], Instruction inst)
+bool send_message(RF24 radio, byte const addr[6], Instruction instr)
 {
-  byte msg[32];
+  byte *msg = create_message(instr);
+  bool success = send_bytes(radio, addr, msg);
+  delete[] msg;
+  return success;
+}
+
+/* send_message(ButtonEvent):  */
+bool send_message(RF24 radio, byte const addr[6], ButtonEvent event)
+{
+  byte *msg = create_message(event);
+  bool success = send_bytes(radio, addr, msg);
+  delete[] msg;
+  return success;
+}
+
+/* create_message(Instruction):  */
+byte *create_message(Instruction instr)
+{
+  byte *msg = new byte[32];
   memset(msg, 0, 32);
 
   //Serial.print("Message is ");
@@ -54,20 +74,16 @@ void send_message(RF24 radio, byte const addr[6], Instruction inst)
 
   /* create the message */
   msg[0] = ID_INSTRUCTION;
-  msg[1] = inst.op;
-  memcpy(msg + 2, inst.data, 30);
+  msg[1] = instr.op;
+  memcpy(msg + 2, instr.data, 30);
 
-  //Serial.print("Sending '");
-  //Serial.print((char*)msg);
-  //Serial.println("'");
-
-  send_bytes(radio, addr, msg);
+  return msg;
 }
 
-/* send_message(ButtonEvent):  */
-void send_message(RF24 radio, byte const addr[6], ButtonEvent event)
+/* create_message(ButtonEvent):  */
+byte *create_message(ButtonEvent event)
 {
-  byte msg[32];
+  byte *msg = new byte[32];
   memset(msg, 0, 32);
 
   /* create the message */
@@ -93,14 +109,17 @@ void send_message(RF24 radio, byte const addr[6], ButtonEvent event)
   offset += 1;
   msg[offset] = event.player;
 
-  send_bytes(radio, addr, msg);
+  return msg;
 }
 
-void send_bytes(RF24 radio, byte const addr[6], byte const *data)
+/* send_bytes: write bytes to the TX FIFO */
+bool send_bytes(RF24 radio, byte const addr[6], byte const *data)
 {
   radio.openWritingPipe(addr);
 
   radio.stopListening();
-  radio.write(data, 32);
+  bool success = radio.write(data, 32);
   radio.startListening();
+
+  return success;
 }
