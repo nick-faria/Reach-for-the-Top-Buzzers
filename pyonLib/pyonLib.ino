@@ -18,7 +18,7 @@ void loop() {
 if (Serial.available()){
 Serial.readBytes(X,1);
 String F=("33");
-Serial.print(int(X[0]));
+Serial.print(char(int(X[0])));
 //Serial.flush();
 Y+=1;
 //digitalWrite(13,HIGH);

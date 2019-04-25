@@ -1,6 +1,6 @@
 import serial
 ser = serial.Serial()
-ser.port='COM27'
+ser.port='COM28'
 ser.baudrate=9600
 ser.open()
 LOOP=1002
@@ -9,14 +9,15 @@ LOOP=1002
 V=0
 X=0
 J=0
+JL="A"
 ser.timeout=1
 ser.readline()
 ser.timeout=0.1
 ##ser.write("SEED")
-while(X<500):
+while(X<12):
     print("As if"+str(X))
     if (ser.writable()):
-        ser.write(chr(X))
+        ser.write(JL)
 ##        ser.write(str(X%10)+str((X+2)%10))
  ##       ser.write(str(X%10)+str((X+2)%10))
 
@@ -24,6 +25,7 @@ while(X<500):
     if(ser.readable()):
 ##        ser.getWriteTimeout
         P=(ser.read(8))
+        JL=input("INPUT)")
 ##        P=((ser.readline()))
         Jam=""
         Count=True
