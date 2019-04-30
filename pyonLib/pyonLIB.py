@@ -37,6 +37,7 @@ class SERCOM:
             except serial.SerialException as error:
                 None
             else:
+                print("error port not found")
                 return
 ##        else:
 ##            print("Error port not found")
@@ -56,9 +57,11 @@ class SERCOM:
             self.ser.writelines(DATA)
 ##            for K in DATA[0]:
 ##                self.ser.write([K])
-    def read(self):
-         if(self.ser.readable()):
-            P=(self.ser.read(self.RN))
+    def read(self,ReadNumber=0):
+        if ReadNumber==0:
+            ReadNumber=self.RN
+        if(self.ser.readable()):
+            P=(self.ser.read(ReadNumber))
             if len(P) >1:
                 H=[]
                 for K in P:
