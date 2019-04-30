@@ -1,21 +1,22 @@
+#Cmbiles the n
 def Dec(X):
     Z=0
+    ##checks if list
     if(type(X)==list):
-        V=[]
+        V=""
         for Z in X:
             if type(Z) is list:
                 for Y in Z:
                     Z*=2
                     Z+=Y
-                    V.append(chr(Z))
-            elif type(X)==int:
-                print(X)
-                V.append(chr(X))
-            elif type(X)==str:
-                for j in X:
-                    V.append(j)
+                V+=(chr(Z))
+            elif type(Z)==int:
+                V+=(chr(Z))
+            elif type(Z)==str:
+                V+=Z
+        return([V])
     elif type(X)==int:
-        return([chr(X)])
+        return(chr(X))
     elif type(X)==str:
         return(X)
 #def Bi(X): 
@@ -29,19 +30,12 @@ class SERCOM:
             I=str(X)
             if len(I)==1:
                 I="0"+I
-            self.ser.port='COM'+I
-            
-##            if (self.ser.isatty()):
-##                self.ser.open()
-##                int("AS")
-##                print(J)
-##                break
-##            elif(True):
-##                print(I+"AS")
+            self.ser.port='COM'+I            
             try:
                 self.ser.open()
                 break
             except serial.SerialException as error:
+                None
             else:
                 return
 ##        else:
@@ -51,12 +45,17 @@ class SERCOM:
         self.ser.timeout=1
         self.ser.readline()
         self.ser.timeout=0.1
+        print(self.ser.writeTimeout)
         self.RN=numberReceive
-    def write(self,data):
+    def write(self,data):##Note if giving binary place the list in a list because I have it in the write comand if there is a single list it will treat the ints as indivisual numbers but if there is a a list in a list it will treat the second list as binary this is so there could be multiple variables sent to the arduino
         DATA=""
         DATA=Dec(data)
         if (self.ser.writable()):
-            self.ser.write(DATA)
+            DV=[]
+            ##for D in DATA:
+            self.ser.writelines(DATA)
+##            for K in DATA[0]:
+##                self.ser.write([K])
     def read(self):
          if(self.ser.readable()):
             P=(self.ser.read(self.RN))
@@ -65,8 +64,12 @@ class SERCOM:
                 for K in P:
                     H.append(ord(K))
                 return(H)
-            else:
+            elif len(P)==1:
                 return(ord(P))
+            else:
+                return(P)
+    def clear(self):
+        self.ser.readall()      
     def close(self):
         self.ser.close()
 
