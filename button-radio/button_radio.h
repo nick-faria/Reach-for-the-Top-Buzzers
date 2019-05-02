@@ -16,7 +16,7 @@
 enum ID_Types
 {
   ID_INSTRUCTION  = 0x00,
-  ID_BUTTON_EVENT,
+  ID_BUTTON_EVENT = 0x01,
 };
 
 /* Opcodes:
@@ -56,6 +56,8 @@ public:
   byte team;
   byte player;
 
+  byte *to_message(int *msg_size);
+
   ButtonEvent()
  : time_ms(0),
    time_us(0),
@@ -83,10 +85,16 @@ public:
   byte op;
   byte data[30];
 
-  Instruction(byte _op)
+  byte *to_message(int *msg_size);
+
+  Instruction(byte _op, byte *_data=nullptr)
  : op(_op)
   {
     memset(data, 0, sizeof(data));
+    if (_data != nullptr)
+    {
+      memcpy(data, _data, 30);
+    }
   }
 };
 
@@ -94,9 +102,6 @@ public:
 
 /* ==[ FUNCTIONS ]== */
 void error(char const *const format, ...);
-
-bool send_message(RF24 radio, byte const addr[6], Instruction inst);
-bool send_message(RF24 radio, byte const addr[6], ButtonEvent event);
 
 
 #endif

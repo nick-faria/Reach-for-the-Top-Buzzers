@@ -1,26 +1,18 @@
 /*
- * Radio receiver
+ * thing
  *
  */
 
-#include <stdarg.h>
-
-#include <SPI.h>
-#include <nRF24L01.h>
+#include <RF24Network.h>
 #include <RF24.h>
+#include <SPI.h>
 
 #include <button_radio.h>
 
 
-
 /* ==[ VARIABLES ]== */
-int my_team = 0,
-    my_player_number = 0;
-
-bool can_be_pressed = true;
-
 /* pins */
-enum Pins
+enum
 {
   PIN_CE  = 7,
   PIN_CSN = 8,
@@ -31,123 +23,127 @@ enum Pins
   PIN_BUTTON = 5,
 };
 
+
 RF24 radio(PIN_CE, PIN_CSN);
+RF24Network network(radio);
 
-/* radio addresses */
-byte const my_name[6] = "CHILD";
-byte const parent_name[6] = "NODE0";
+#define SECOND  0
 
-/* registers */
+#if SECOND
+const uint16_t this_node = 02;
+#else
+const uint16_t this_node = 01;
+#endif
+const uint16_t parent    = 00;
+
+
+bool can_be_pressed = true;
+
 byte registers[REGISTER_COUNT];
 
-/* max number of events to process per loop */
-unsigned const EVENTS_PER_LOOP = 16;
+
+/* ==[ FUNCTIONS ]== */
+void interpret_message(RF24NetworkHeader header, byte *message);
 
 
 
-/* setup: initialization */
 void setup()
 {
   Serial.begin(9600);
   radio.begin();
+  network.begin(this_node);
+  radio.setDataRate(RF24_2MBPS);
 
-  /* open writing pipe to parent */
-  radio.openWritingPipe(parent_name);
-
-  /* start listening on `my_name'*/
-  radio.openReadingPipe(1, my_name);
-
-  /* radio configuration */
-  radio.setPALevel(RF24_PA_MIN);
-  radio.setAutoAck(true);
-  radio.setRetries(0,15);
-
-  radio.startListening();
+  pinMode(PIN_LIGHT , OUTPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
 
   Serial.println("Initialized");
-
-  pinMode(PIN_LIGHT, OUTPUT);
-  pinMode(PIN_BUTTON, INPUT_PULLUP);
 }
 
-/* loop: main loop */
 void loop()
 {
-  /* if we've received a message, we must interpret it */
-  for (unsigned i = 0; i < EVENTS_PER_LOOP && radio.available(); ++i)
+  network.update();
+
+  /* receive messages */
+  while (network.available())
   {
-    /* read a message */
-    byte message[32];
-    radio.read(message, sizeof(message));
-    byte id = message[0];
+    /* read the message from the network */
+    RF24NetworkHeader header;
+    char message[32];
+    Serial.println("Reading...");
+    network.read(header, &message, 32);
+    Serial.print("Received ");
+    Serial.println(message);
 
-    switch (id)
-    {
-    /* instruction */
-    case ID_INSTRUCTION:
-     {
-      byte opcode = message[1];
-      switch (opcode)
-      {
-      /* mark a new question */
-      case OP_NEW_QUESTION:
-       {Serial.println("New Question");
-        can_be_pressed = true;
-       }break;
+    /* interpret the message */
+    interpret_message(header, message);
 
-      /* write to a register */
-      case OP_WRITE_REGISTER:
-       {byte reg   = message[2],
-             value = message[3];
-
-        Serial.print("write 0x");
-        Serial.print(value, HEX);
-        Serial.print(" to register 0x");
-        Serial.println(reg, HEX);
-
-        registers[reg] = value;
-       }break;
-      
-      default:
-        error("unknown opcode %.2hhX", opcode);
-        break;
-      }
-     }break;
-
-    /* button event */
-    case ID_BUTTON_EVENT:
-     {Serial.println("Button Event");
-      // TODO
-     }break;
-
-    default:
-      Serial.println("error!");
-      error("unknown message ID 0x%.2hhX", id);
-      break;
-    }
+    network.update();
   }
 
-
-  /* detect events on this button */
   if (digitalRead(PIN_BUTTON) == LOW)
   {
-    if (can_be_pressed)
-    {
-      Serial.println("button is pressed!");
-      ButtonEvent event(my_team, my_player_number);
+    RF24NetworkHeader header(parent, ID_BUTTON_EVENT);
 
-      while (send_message(radio, parent_name, event) == false)
-      {
-      }
-      can_be_pressed = false;
-    }
+    ButtonEvent btn_event(0, 0);
+    int msg_size = 0;
+    byte *msg = btn_event.to_message(&msg_size);
+
+    network.write(header, msg, msg_size);
+    delete[] msg;
+    Serial.println("button pressed");
   }
 
+  delay(50);
+}
 
-  /* turn on light, sound buzzer, etc. if we are told to */
-  digitalWrite(PIN_LIGHT, registers[REG_LIGHT] & 0x01);
-  analogWrite(PIN_SOUND, registers[REG_SOUND]);
 
-  Serial.println("End of Cycle\n");
+
+/* intepret_message: interpret a message from the network */
+void interpret_message(RF24NetworkHeader header, byte *message)
+{
+  switch(header.type)
+  {
+  /* instruction */
+  case ID_INSTRUCTION:
+   {
+    byte opcode = message[1];
+    switch (opcode)
+    {
+    /* mark a new question */
+    case OP_NEW_QUESTION:
+     {Serial.println("New Question");
+      can_be_pressed = true;
+     }break;
+
+    /* write to a register */
+    case OP_WRITE_REGISTER:
+     {byte reg   = message[2],
+           value = message[3];
+
+      Serial.print("write 0x");
+      Serial.print(value, HEX);
+      Serial.print(" to register 0x");
+      Serial.println(reg, HEX);
+
+      registers[reg] = value;
+     }break;
+    
+    default:
+      error("unknown opcode %.2hhX", opcode);
+      break;
+    }
+   }break;
+
+  /* button event */
+  case ID_BUTTON_EVENT:
+   {Serial.println("Button Event");
+    // TODO
+   }break;
+
+  default:
+    error("unknown message ID 0x%.2hhX", header.type);
+    break;
+  }
 }
 

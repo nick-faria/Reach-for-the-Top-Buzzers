@@ -16,8 +16,6 @@
 
 
 
-byte *create_message(Instruction instr);
-byte *create_message(ButtonEvent event);
 bool send_bytes(RF24 radio, byte const addr[6], byte const data[32]);
 
 
@@ -32,7 +30,7 @@ void error(char const *const format, ...)
   char *out = NULL;
   int str_length = vsnprintf(out, 0, format, ap);
 
-  out = calloc(1, str_length);
+  out = (char*)calloc(1, str_length);
   vsnprintf(out, str_length, format, ap);
 
   Serial.print("ERROR: ");
@@ -42,46 +40,35 @@ void error(char const *const format, ...)
   va_end(ap);
 }
 
-/* send_message(Instruction):  */
-bool send_message(RF24 radio, byte const addr[6], Instruction instr)
-{
-  byte *msg = create_message(instr);
-  bool success = send_bytes(radio, addr, msg);
-  delete[] msg;
-  return success;
-}
 
-/* send_message(ButtonEvent):  */
-bool send_message(RF24 radio, byte const addr[6], ButtonEvent event)
-{
-  byte *msg = create_message(event);
-  bool success = send_bytes(radio, addr, msg);
-  delete[] msg;
-  return success;
-}
 
-/* create_message(Instruction):  */
-byte *create_message(Instruction instr)
+/* to_message(Instruction):  */
+byte *Instruction::to_message(int *msg_size=nullptr)
 {
   byte *msg = new byte[32];
   memset(msg, 0, 32);
 
   //Serial.print("Message is ");
-  //Serial.print(inst.op);
+  //Serial.print(this->op);
   //Serial.print(", ");
-  //Serial.print((char*)inst.data);
+  //Serial.print((char*)this->data);
   //Serial.println("");
 
   /* create the message */
   msg[0] = ID_INSTRUCTION;
-  msg[1] = instr.op;
-  memcpy(msg + 2, instr.data, 30);
+  msg[1] = this->op;
+  memcpy(msg + 2, this->data, 30);
+
+  if (msg_size != nullptr)
+  {
+    *msg_size = 32;
+  }
 
   return msg;
 }
 
-/* create_message(ButtonEvent):  */
-byte *create_message(ButtonEvent event)
+/* to_message(ButtonEvent):  */
+byte *ButtonEvent::to_message(int *msg_size=nullptr)
 {
   byte *msg = new byte[32];
   memset(msg, 0, 32);
@@ -101,25 +88,19 @@ byte *create_message(ButtonEvent event)
 
   msg[0] = ID_BUTTON_EVENT;
   offset += 1;
-  memcpy( msg + offset, &event.time_ms, sizeof(event.time_ms) );
-  offset += sizeof(event.time_ms);
-  memcpy( msg + offset, &event.time_us, sizeof(event.time_us) );
-  offset += sizeof(event.time_us);
-  msg[offset] = event.team;
+  memcpy( msg + offset, &this->time_ms, sizeof(this->time_ms) );
+  offset += sizeof(this->time_ms);
+  memcpy( msg + offset, &this->time_us, sizeof(this->time_us) );
+  offset += sizeof(this->time_us);
+  msg[offset] = this->team;
   offset += 1;
-  msg[offset] = event.player;
+  msg[offset] = this->player;
+
+
+  if (msg_size != nullptr)
+  {
+    *msg_size = offset;
+  }
 
   return msg;
-}
-
-/* send_bytes: write bytes to the TX FIFO */
-bool send_bytes(RF24 radio, byte const addr[6], byte const *data)
-{
-  radio.openWritingPipe(addr);
-
-  radio.stopListening();
-  bool success = radio.write(data, 32);
-  radio.startListening();
-
-  return success;
 }
