@@ -12,6 +12,7 @@ def updateScore(button, points)
 
 def openQuestion(question):
 
+    sendQuestion(question[0])
     points = question[1]
     topic = question[2]
     
@@ -41,6 +42,7 @@ def openQuestion(question):
 
 def teamQuestion(question):
 
+    sendQuestion(question[0])
     topic = question[1]
     sendPoints(10)
     sendQ(question[2])
@@ -110,6 +112,7 @@ def teamQuestion(question):
     
 def whoAmIQuestion(question):
 
+    sendQuestion(question[0])
     whowhat = question[1]
     sendWhowhat()
     answer = question[2]
@@ -140,7 +143,8 @@ def whoAmIQuestion(question):
                 answerCount +=1;
     
 def assignedQuestion(question):
-    
+
+    sendQuestion(question[0])
     topic = question[1]
     sendPoints(10)
     sendTopic(topic)
@@ -176,6 +180,7 @@ def assignedQuestion(question):
 
 def shootoutQuestion(question):
 
+    sendQuestion(question[0])
     totalEligibleBuzzers = [1,1,1,1,1,1,1,1]
     answeredBuzzers = [0,0,0,0,0,0,0,0]
     nQuestions = question[1]
@@ -237,6 +242,7 @@ def shootoutQuestion(question):
 
 def endQuestion(question):
 
+    sendQuestion(question[0])
     points = question[1]
     topic = question[2]
     
