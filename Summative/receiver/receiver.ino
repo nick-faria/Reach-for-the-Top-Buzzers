@@ -1,5 +1,5 @@
 /*
- * thing
+ * Button
  *
  */
 
@@ -27,14 +27,8 @@ enum
 RF24 radio(PIN_CE, PIN_CSN);
 RF24Network network(radio);
 
-#define SECOND  0
-
-#if SECOND
-const uint16_t this_node = 02;
-#else
-const uint16_t this_node = 01;
-#endif
-const uint16_t parent    = 00;
+uint16_t       this_node = 01;
+uint16_t const parent    = 00;
 
 
 bool can_be_pressed = true;
@@ -44,6 +38,7 @@ byte registers[REGISTER_COUNT];
 
 /* ==[ FUNCTIONS ]== */
 void interpret_message(RF24NetworkHeader header, byte *message);
+bool pair(void);
 
 
 
@@ -51,11 +46,17 @@ void setup()
 {
   Serial.begin(9600);
   radio.begin();
-  network.begin(this_node);
   radio.setDataRate(RF24_2MBPS);
 
   pinMode(PIN_LIGHT , OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
+
+  Serial.println("Pairing...");
+  while (pair() == false)
+  {
+    delay(100);
+  }
+  Serial.println("Paired.");
 
   Serial.println("Initialized");
 }
@@ -75,10 +76,7 @@ void loop()
     Serial.print("Received ");
     Serial.println(message);
 
-    /* interpret the message */
     interpret_message(header, message);
-
-    network.update();
   }
 
   if (digitalRead(PIN_BUTTON) == LOW)
@@ -145,5 +143,102 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     error("unknown message ID 0x%.2hhX", header.type);
     break;
   }
+
+  analogWrite(PIN_SOUND, registers[REG_SOUND]);
+  digitalWrite(PIN_LIGHT, registers[REG_LIGHT]);
+}
+
+/* pair: pair the button with the server */
+bool pair(void)
+{
+  /*  PAIRING PROCEDURE
+   *  =================
+   * connect to the server
+   * ping the server until it acknowledges or until it times out
+   * if we were acknowledged:
+   *  set our address to the address received from the server
+   *  ping the server again to verify our connection
+   *  if it failed:
+   *   goto begin.
+   *  else:
+   *    done.
+   * else:
+   *  goto begin.
+   */
+
+  // make sure we can actually talk to the server
+  if (ping())
+  {
+    // Node 01 is reserved for pairing
+    network.begin(01);
+
+    // request to pair with the server
+    RF24NetworkHeader pair_header(parent, ID_PAIR);
+    char pair_msg[32] = "";
+    network.write(pair_header, pair_msg, sizeof(pair_msg));
+
+    // wait for the pairing message from the server
+    while (!network.available())
+    {
+      network.update();
+    }
+
+    // receive our new address
+    uint16_t address = 0;
+    RF24NetworkHeader recv_header;
+    network.read(recv_header, &address, sizeof(address));
+    Serial.print("new address is ");
+    Serial.println(address);
+
+    // set our new address
+    network.begin(address);
+    this_node = address;
+
+    // ensure we can connect to the server with our new address
+    if (ping())
+    {
+      return true;
+    }
+  }
+  // we were not acknowledged
+  else
+  {
+    Serial.println("Server pong timed out!");
+  }
+
+  return false;
+}
+
+/* ping: ping the server */
+bool ping(void)
+{
+  return true;
+  unsigned long PING_TIMEOUT = 10000;
+
+  // try to ping the server
+  RF24NetworkHeader ping_header(parent, ID_PING);
+  char ping[32] = "ping";
+  network.write(ping_header, ping, sizeof(ping));
+  Serial.println("Ping!");
+
+  unsigned long start = millis();
+
+
+  // wait for the pong from the server
+  while (!network.available())
+  {
+    network.update();
+    if (millis() - start > PING_TIMEOUT)
+    {
+      return false;
+    }
+  }
+
+  // receive the pong from the server
+  RF24NetworkHeader pong_header;
+  char pong[32];
+  network.read(pong_header, pong, sizeof(pong));
+
+  return true;
 }
 

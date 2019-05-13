@@ -16,10 +16,6 @@
 
 
 
-bool send_bytes(RF24 radio, byte const addr[6], byte const data[32]);
-
-
-
 /* error: error logging */
 void error(char const *const format, ...)
 {

@@ -4,8 +4,8 @@
  */
 
 
-#ifndef _TEST_H
-#define _TEST_H
+#ifndef _BUTTON_RADIO_H
+#define _BUTTON_RADIO_H
 
 
 /* ==[ ENUMS ]== */
@@ -17,6 +17,8 @@ enum ID_Types
 {
   ID_INSTRUCTION  = 0x00,
   ID_BUTTON_EVENT = 0x01,
+  ID_PING         = 0x02,
+  ID_PAIR         = 0x03,
 };
 
 /* Opcodes:
