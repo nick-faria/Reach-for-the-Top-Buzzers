@@ -1,6 +1,6 @@
 #See the group project page for agreed upon transmission order/format
 
-questionTypes = ["open", "team", "whowhat", "assigned", "shootout",  "tiebreaker"]
+questionTypes = ["open", "team", "whowhat", "assigned", "shootout",  "tiebreaker", "wordscramble"]
 
 global score;
 score = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -240,7 +240,7 @@ def shootoutQuestion(question):
                 answerCount +=1
 
 
-def endQuestion(question):
+def tiebreaker(question):
 
     sendQuestion(question[0])
     points = question[1]
@@ -270,8 +270,13 @@ def endQuestion(question):
                 answerCount +=1;
         if winCondition == True:
             break
+
+def wordscramble(question):
+
+    sendQuestion(question[0])
     
-questionMethods = [openQuestion, teamQuestion, whowhatQuestion, assignedQuestion, shootoutQuestion, endQuestion]
+
+questionMethods = [openQuestion, teamQuestion, whowhatQuestion, assignedQuestion, shootoutQuestion, tiebreaker, wordscramble]
 
 while endGame = False:
     
