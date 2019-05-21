@@ -1,11 +1,25 @@
 #See the group project page for agreed upon transmission order/format
 
+
+
 questionTypes = ["open", "team", "whowhat", "assigned", "shootout",  "tiebreaker", "wordscramble"]
 
 global score;
 score = [0, 0, 0, 0, 0, 0, 0, 0];
 
 questions = readinput
+
+def receiveFirstButton():
+
+    firstButton = SERCOM.read()
+    if firstButton != None:
+        firstButton += 1
+    SERCOM.clear()
+    return firstButton
+
+def sendEligibleBuzzers(buzzers):
+
+    SERCOM.write(buzzers)
 
 def updateScore(button, points)
     score[button -1] += points
@@ -26,7 +40,7 @@ def openQuestion(question):
         sendA(question[5 + q])
         answerCount = 0
         endQuestion = False
-        while receiveFirstButton() == 0 and endQuestion == False:
+        while receiveFirstButton() == None and endQuestion == False:
             endQuestion = nextButtonPressed()
         while answerCount < 2 and endQuestion == False:
             if receiveAnswerCheck():
@@ -283,3 +297,4 @@ while endGame = False:
     for question in questions:
         questionMethods[question[0](question)]
     
+SERCOM.close()
