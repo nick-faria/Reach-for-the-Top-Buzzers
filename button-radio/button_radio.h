@@ -19,6 +19,7 @@ enum ID_Types
   ID_BUTTON_EVENT = 0x01,
   ID_PING         = 0x02,
   ID_PAIR         = 0x03,
+  ID_DISCONNECT   = 0x04,
 };
 
 /* Opcodes:
@@ -37,7 +38,6 @@ enum Registers
 {
   REG_LIGHT  = 0x00,
   REG_SOUND,
-  REG_ENABLE,
 
   REGISTER_COUNT,  /* dummy, counts how many registers there are */
 };
@@ -53,8 +53,8 @@ enum Registers
 class ButtonEvent
 {
 public:
-  unsigned long time_ms;
-  unsigned long time_us;
+  uint32_t time_ms;
+  uint32_t time_us;
   byte team;
   byte player;
 

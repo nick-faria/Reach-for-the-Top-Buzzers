@@ -1,6 +1,22 @@
 /*
- * Server
+ *                            THE SERVER
+ *                            ==========
  *
+ *   The server is the central hub. This is where all the buttons
+ * send their event data, and where the computer sends out its
+ * instructions to the buttons. When the server receives an event
+ * message from the buttons, it passes it up to the computer. In
+ * turn, the computer sends instructions down to the server to be
+ * sent out to the buttons.
+ *
+ */
+
+/* TODO:
+ *  - Send button presses to the computer
+ *  - Add a button to start the pairing process
+ *  - Start using the Arduino Mega
+ *   (NOTE -- you seemingly can't change which pins are used for
+ *    SPI, rendering the Mega pointless)
  */
 
 #include <RF24Network.h>
@@ -16,6 +32,8 @@ enum
 {
   PIN_CE  = 7,
   PIN_CSN = 8,
+
+  PIN_PAIR_BTN = 5,
 };
 
 
@@ -26,6 +44,10 @@ uint16_t const this_node = 00;
 
 uint16_t children[4] = { };
 unsigned child_count = 0;
+
+unsigned long const PAIRING_MODE_TIMEOUT = 10000;
+bool in_pairing_mode = false;
+unsigned long pairing_mode_start_time = 0;
 
 
 /* ==[ FUNCTIONS ]== */
@@ -39,10 +61,13 @@ void setup()
   radio.begin();
   network.begin(this_node);
   radio.setDataRate(RF24_2MBPS);
+
+  pinMode(PIN_PAIR_BTN, INPUT_PULLUP);
 }
 
 static byte counter = 0x08;
 static int delta = 8;
+static byte led_state = 0;
 
 void loop()
 {
@@ -65,6 +90,7 @@ void loop()
   /* send messages */
   for (unsigned i = 0; i < child_count; ++i)
   {
+    {
     RF24NetworkHeader header(children[i], ID_INSTRUCTION);
 
     Instruction inst(OP_WRITE_REGISTER);
@@ -75,14 +101,48 @@ void loop()
     byte *msg = inst.to_message(&msg_size);
 
     network.write(header, msg, msg_size);
+    delayMicroseconds(300);
     delete[] msg;
+    }
+    {
+    RF24NetworkHeader header(children[i], ID_INSTRUCTION);
+
+    Instruction inst(OP_WRITE_REGISTER);
+    inst.data[0] = REG_LIGHT;
+    inst.data[1] = led_state;
+
+    int msg_size = 0;
+    byte *msg = inst.to_message(&msg_size);
+
+    network.write(header, msg, msg_size);
+    delayMicroseconds(300);
+    delete[] msg;
+    }
   }
 
   if (counter >= 0xff - 8  || counter <= 0)
   {
     delta *= -1;
+
+    led_state = led_state? 0 : 1;
   }
   counter += delta;
+
+
+  // enter pairing mode if pairing button is clicked
+  if (digitalRead(PIN_PAIR_BTN) == LOW)
+  {
+    in_pairing_mode = true;
+    pairing_mode_start_time = millis();
+    Serial.println("Entering pairing mode");
+  }
+
+  // exit pairing mode after a certain timeframe
+  if (in_pairing_mode && millis() - pairing_mode_start_time > PAIRING_MODE_TIMEOUT)
+  {
+    in_pairing_mode = false;
+    Serial.println("Leaving pairing mode");
+  }
 
   delay(50);
 }
@@ -99,9 +159,9 @@ void loop()
  */
 uint16_t next_child(void)
 {
-  static uint8_t digits[4] = { 0, 0, 0, 0 };
+  static uint8_t digits[4] = { 2, 0, 0, 0 };
 
-  uint16_t addr = 0;
+  uint16_t addr = digits[0];
 
   if (digits[1] == 0)
   {
@@ -119,7 +179,6 @@ uint16_t next_child(void)
   {
     addr = (digits[0] << 9) | (digits[1] << 6) | (digits[2] << 3) | digits[3];
   }
-  Serial.println(addr, OCT);
 
   for (int i = 0; i < 4; ++i)
   {
@@ -184,7 +243,7 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     e.team   = message[offset];
     e.player = message[offset+1];
 
-    // TODO
+    // TODO -- send the event to the computer
     Serial.print("Event occurred at ");
     Serial.print(e.time_ms);
     Serial.print("ms, ");
@@ -205,21 +264,41 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     char pong_msg[32] = "pong";
     network.write(response_header, pong_msg, sizeof(pong_msg));
     Serial.println("Pong!");
+
+    RF24NetworkHeader null_header;
+    byte null_msg[32];
+    network.read(null_header, &null_msg, sizeof(null_msg));
    }break;
 
   case ID_PAIR:
    {Serial.println("Pairing request received");
+    if (in_pairing_mode)
+    {
+      uint16_t addr = next_child();
+  
+      RF24NetworkHeader response_header(01, ID_PAIR);
+      char pair_msg[32] = { addr & 0xFF, (addr >> 8) & 0xFF, 0 };
+      network.write(response_header, pair_msg, sizeof(pair_msg));
+  
+      children[child_count++] = addr;
+  
+      Serial.print("New child is @ ");
+      Serial.println(addr);
+    }
+    else
+    {
+      Serial.println("Not in pairing mode!");
+    }
+   }break;
 
-    uint16_t addr = next_child();
+  case ID_DISCONNECT:
+   {Serial.println("Disconnect message received");
+    // TODO -- properly remove the child
+    child_count--;
 
-    RF24NetworkHeader response_header(01, ID_PAIR);
-    char pair_msg[32] = { addr & 0xFF, (addr >> 8) & 0xFF, 0 };
-    network.write(response_header, pair_msg, sizeof(pair_msg));
-
-    children[child_count++] = addr;
-
-    Serial.print("New child is @ ");
-    Serial.println(addr);
+    RF24NetworkHeader null_header;
+    byte null_msg[32];
+    network.read(null_header, &null_msg, sizeof(null_msg));
    }break;
 
   default:
