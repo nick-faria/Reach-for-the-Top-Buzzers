@@ -292,7 +292,7 @@ def wordscramble(question):
 
 questionMethods = [openQuestion, teamQuestion, whowhatQuestion, assignedQuestion, shootoutQuestion, tiebreaker, wordscramble]
 
-while endGame = False:
+while endGame == False:
     
     for question in questions:
         questionMethods[question[0](question)]
