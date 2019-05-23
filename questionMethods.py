@@ -4,8 +4,8 @@
 
 questionTypes = ["open", "team", "whowhat", "assigned", "shootout",  "tiebreaker", "wordscramble"]
 
-global score;
-score = [0, 0, 0, 0, 0, 0, 0, 0];
+global SCORE;
+SCORE = [0, 0, 0, 0, 0, 0, 0, 0];
 
 questions = readinput
 
@@ -22,7 +22,7 @@ def sendEligibleBuzzers(buzzers):
     SERCOM.write(buzzers)
 
 def updateScore(button, points)
-    score[button -1] += points
+    SCORE[button -1] += points
 
 def openQuestion(question):
 
