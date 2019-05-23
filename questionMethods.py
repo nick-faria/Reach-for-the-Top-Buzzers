@@ -1,5 +1,5 @@
-#See the group project page for agreed upon transmission order/format
-
+''' See the group project page for agreed upon transmission order/format '''
+from GUI import *
 
 
 questionTypes = ["open", "team", "whowhat", "assigned", "shootout",  "tiebreaker", "wordscramble"]
