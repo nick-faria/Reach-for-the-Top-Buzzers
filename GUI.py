@@ -233,9 +233,6 @@ class TextField:
         else:
             ## raise alignmentNotFoundError
             pass
-        
-        ## Sets the vertical position of the text
-        ##self.text_y = self.y + self.outline_width
 
     def render(self):
         ''' Draws the text field to the provided GUI (including background, border, text as necesary)'''
