@@ -1,37 +1,4 @@
-# -*- coding: cp1253 -*-
-
-##Question File Types/Formatting
-#__________________________________
-
-##Open Questions (with topics)
-##OPENTOPIC, PTS_Each, Topic, #ofQs, Q1, A1, Q2, A2, …
-
-##Assigned Questions
-##ASSIGN, Common_Prompt/topic, Q1, A1, Q2, A2, …, Q8, A8
-
-##Who/What Am I?
-##WHOWHAT, “Who” or “What” (depends on answer), Answer, C1, C2, C3, C4
-
-##Tiebreakers
-##TIEBREAK, PTS (i.e. 10), Question, Answer
-
-##Shootout
-##SHOOTOUT, QS_Total, Q1, A1, Q2, A2, …, Q12, A12
-
-##Team Question
-##TEAM, PTS_Each, TAm IOPIC, Q1, A1, Q2, A2, …, Q4, A4
-
-##Word Scramble
-##SCRAMBLE, PTS_Total, letters (as a single string), Answers (separated by spaces)
-
-
-###### To do list #######
-#Fix tie breakers parcing
-
-
 import re
-
-
 
 #Returns True if 'text' is a PDF page footer
 def is_footer(text):
@@ -42,7 +9,7 @@ def is_footer(text):
         return True
 
 def ignore(text):
-    ignore_ = re.compile('.*PART.*|.*FOR.*EACH.*CORRECT.*ANSWER|.*MINUTE.*BREAK.*TO.*ROUND|END.*OF.*GAME')
+    ignore_ = re.compile('.*PART.*|.*FOR.*EACH.*CORRECT.*ANSWER|.*MINUTE.*BREAK.*TO.*ROUND|END.*OF.*GAME|\n')
     if ignore_.match(text) == None:
         return False
     else:
@@ -73,9 +40,9 @@ def read_multiline(Text, i, filter_):
     out = ''
 
     end_multiline = re.compile(filter_)
-    while i < len(Text) and not end_multiline.match(Text[i]) == None and not is_question_or_answer_or_clue(Text[i]):
-        if not is_footer(Text[i]) and not ignore(Text[i]) and Text[i] != '\n':
-            out += ' ' + Text[i]
+    while i < len(Text) and end_multiline.match(Text[i]) == None and not is_question_or_answer_or_clue(Text[i]):
+        if not is_footer(Text[i]) and not ignore(Text[i]):
+            out += ' ' + Text[i][:-1]
         i += 1
 
     return out, i
@@ -130,11 +97,13 @@ for i in range(len(Text)):
 
             question_type = tmp[0]
             topic = tmp[1]
-            points = int(Text[i][:Text[i].find(char)])
-            
-            Temp.append(question_type)
-            
-            if question_type != 'ASSIGNED QUESTION':
+            points = int(Text[i][:Text[i].find(char)])                      
+            if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
+                Temp.append('OPEN QUESTION')
+            else:
+                Temp.append(question_type)
+
+            if re.compile('.*ASSIGNED QUESTION').match(question_type) == None:
                 Temp.append(points)
             Temp.append(topic)
        
@@ -142,8 +111,23 @@ for i in range(len(Text)):
         #This handles question types that do not have topics, such as Who Am I.
         except IndexError:
             try:
-                Temp.append(type_[:-1]) # QUESTION TYPE
-                Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
+                # QUESTION TYPE
+                question_type = type_[:-1]
+                if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
+                    Temp.append('OPEN QUESTION')
+                else:
+                    Temp.append(question_type)
+
+                # NOT WHO/WHAT AM I
+                if re.compile('.*(WHO|WHAT) AM').match(type_[:-1]) == None:
+                    Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
+                # WHO/WHAT AM I
+                else:
+                    Temp[-1] = 'WHO/WHAT AM I'
+                    if type_[:3] == 'WHO':
+                        Temp.append('WHO')
+                    else:
+                        Temp.append('WHAT')
 
             # This handles the tiebreakers. Since the tiebreaker line has a '-' in it, we just treat this as a special case.
             except ValueError:
@@ -153,17 +137,18 @@ for i in range(len(Text)):
 
     # question line
     elif question_line.match(Text[i]):
-        dot_idx = Text[i].find('.')
-        Temp.append(Text[i][dot_idx+2:-1])
+        if Temp[0] != 'WHO/WHAT AM I':
+            dot_idx = Text[i].find('.')
+            Temp.append(Text[i][dot_idx+2:-1])
 
-        # multiline questions
-        # we stop reading once we see an answer
-        r = read_multiline(Text, i+1, answer_regex)
-        Temp[-1] += r[0]
-        i = r[1]
+            # multiline questions
+            # we stop reading once we see an answer
+            r = read_multiline(Text, i+1, answer_regex)
+            Temp[-1] += r[0]
+            i = r[1]
 
-        if scramble_question.match(Temp[-1]) != None:
-            Temp[-1] = ''.join(Temp[-1].split(' ')).replace(',','').replace('.','')
+            if scramble_question.match(Temp[-1]) != None:
+                Temp[-1] = ''.join(Temp[-1].split(' ')).replace(',','').replace('.','')
 
     # clue line
     elif clue_line.match(Text[i]):
@@ -207,4 +192,9 @@ for m in Mainlist:
     for i in m:
         print(i)
     print()
+
+
+File.close()
+
+
 
