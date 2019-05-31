@@ -16,10 +16,28 @@
 
 
 
+/* debug: debug logging */
+void debug(char const *const format, ...)
+{
+  va_list ap;
+  va_start(ap, format);
+
+  char *out = NULL;
+  int str_length = vsnprintf(out, 0, format, ap) + 1;
+
+  out = (char*)calloc(1, str_length);
+  vsnprintf(out, str_length, format, ap);
+
+  Serial.print("DEBUG: ");
+  Serial.println(out);
+  free(out);
+
+  va_end(ap);
+}
+
 /* error: error logging */
 void error(char const *const format, ...)
 {
-  Serial.println("an error occurred");
   va_list ap;
   va_start(ap, format);
 
@@ -76,10 +94,6 @@ byte *ButtonEvent::to_message(int *msg_size=nullptr)
   //Serial.print(event.time_ms);
   //Serial.print(", ");
   //Serial.print(event.time_us);
-  //Serial.print(", ");
-  //Serial.print(event.team);
-  //Serial.print(", ");
-  //Serial.print(event.player);
   //Serial.println("");
 
   msg[0] = ID_BUTTON_EVENT;
@@ -87,10 +101,6 @@ byte *ButtonEvent::to_message(int *msg_size=nullptr)
   memcpy( msg + offset, &this->time_ms, sizeof(this->time_ms) );
   offset += sizeof(this->time_ms);
   memcpy( msg + offset, &this->time_us, sizeof(this->time_us) );
-  offset += sizeof(this->time_us);
-  msg[offset] = this->team;
-  offset += 1;
-  msg[offset] = this->player;
 
 
   if (msg_size != nullptr)

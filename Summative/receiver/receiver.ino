@@ -11,11 +11,6 @@
  *
  */
 
-/* TODO:
- *  - Add the piezo buzzer instead of just an oscillating LED
- *  - Add a button to start the pairing process
- */
-
 #include <RF24Network.h>
 #include <RF24.h>
 #include <SPI.h>
@@ -27,14 +22,13 @@
 /* pins */
 enum
 {
-  PIN_CE  = 7,
-  PIN_CSN = 8,
+  PIN_CE     = 7,
+  PIN_CSN    = 6,
 
-  PIN_LIGHT = 2,
-  PIN_SOUND = 3,
+  PIN_LIGHT  = 9,
+  PIN_SOUND  = 5,
 
-  PIN_BUTTON   = 5,
-  PIN_PAIR_BTN = 4,
+  PIN_BUTTON = 8,
 };
 
 
@@ -44,9 +38,15 @@ RF24Network network(radio);
 uint16_t       this_node = 01;
 uint16_t const parent    = 00;
 
+uint8_t this_team = 0;
 
-bool can_be_pressed = true;
-int  pair_btn_previous = HIGH;
+
+bool can_be_pressed  = true;
+
+int  button_previous = HIGH;
+bool button_is_held = false;
+unsigned long button_pressed_time = 0;
+unsigned long const PAIRING_MODE_START_DELAY = 1000;
 
 byte registers[REGISTER_COUNT];
 
@@ -63,18 +63,12 @@ void setup()
   radio.begin();
   radio.setDataRate(RF24_2MBPS);
 
+  network.multicastLevel(this_team);
+
   pinMode(PIN_LIGHT   , OUTPUT);
   pinMode(PIN_BUTTON  , INPUT_PULLUP);
-  pinMode(PIN_PAIR_BTN, INPUT_PULLUP);
 
-  Serial.println("Pairing...");
-  while (pair() == false)
-  {
-    delay(1000);
-  }
-  Serial.println("Paired.");
-
-  Serial.println("Initialized");
+  debug("Initialized");
 }
 
 void loop()
@@ -87,42 +81,85 @@ void loop()
     /* read the message from the network */
     RF24NetworkHeader header;
     char message[32];
-    Serial.println("Reading...");
+    debug("Reading...");
     network.read(header, &message, 32);
-    Serial.print("Received ");
-    Serial.println(message);
+    debug("Received '%s'", message);
 
     interpret_message(header, message);
   }
 
-  if (digitalRead(PIN_BUTTON) == LOW)
+  /* handle the button -- when pressed, it sends an event to the server.
+     If it is held for long enough, the unit will enter pairing mode */
+  int button_state = digitalRead(PIN_BUTTON);
+  if (button_state != button_previous)
   {
-    can_be_pressed = false;
-    RF24NetworkHeader header(parent, ID_BUTTON_EVENT);
+    debug("button pushed");
 
-    ButtonEvent btn_event(0, 0);
-    int msg_size = 0;
-    byte *msg = btn_event.to_message(&msg_size);
+    /* the button was pressed */
+    if (button_state == LOW)
+    {
+      button_pressed_time = millis();
+      button_is_held = true;
 
-    network.write(header, msg, msg_size);
-    delayMicroseconds(300);
-    delete[] msg;
-    Serial.println("button pressed");
+      /* send a button press event to the server */
+      if (can_be_pressed)
+      {
+        can_be_pressed = false;
+        RF24NetworkHeader header(parent, ID_BUTTON_EVENT);
+    
+        ButtonEvent btn_event(0, 0);
+        int msg_size = 0;
+        byte *msg = btn_event.to_message(&msg_size);
+    
+        network.write(header, msg, msg_size);
+        delayMicroseconds(300);
+        delete[] msg;
+        debug("button pressed");
+
+        registers[REG_LIGHT] = 0x01;
+        registers[REG_SOUND] = 0x10;
+      }
+    }
+    /* button was released */
+    else
+    {
+      button_is_held = false;
+      registers[REG_LIGHT] = 0x00;
+      registers[REG_SOUND] = 0x00;
+    }
   }
+  button_previous = button_state;
 
-  // whenever the pairing button is pressed, attempt to pair
-  int pair_btn_state = digitalRead(PIN_PAIR_BTN);
-  if (pair_btn_state == LOW && pair_btn_previous == HIGH)
+  /* after the button has been held for a certain amount of time, attempt to pair */
+  if (button_is_held && millis() - button_pressed_time >= PAIRING_MODE_START_DELAY)
   {
+    /* hold our previous address, so we can reuse
+     * our old address if we fail to pair */
     uint16_t previous_address = this_node;
     if (!pair())
     {
-      Serial.println("Failed to pair!");
+      debug("Failed to pair!");
       this_node = previous_address;
       network.begin(this_node);
     }
+    else
+    {
+      button_is_held = false;
+      can_be_pressed = true;
+    }
   }
-  pair_btn_previous = pair_btn_state;
+
+  /* update the registers */
+  digitalWrite(PIN_LIGHT, registers[REG_LIGHT]);
+  if (registers[REG_SOUND] == 0x00)
+  {
+    noTone(PIN_SOUND);
+  }
+  else
+  {
+    int pitch = map(registers[REG_SOUND], 0, 255, 512, 1024);
+    tone(PIN_SOUND, pitch);
+  }
 
   delay(50);
 }
@@ -142,7 +179,8 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     {
     /* mark a new question */
     case OP_NEW_QUESTION:
-     {Serial.println("New Question");
+     {
+      debug("New Question");
       can_be_pressed = true;
      }break;
 
@@ -151,10 +189,7 @@ void interpret_message(RF24NetworkHeader header, byte *message)
      {byte reg   = message[2],
            value = message[3];
 
-      Serial.print("write 0x");
-      Serial.print(value, HEX);
-      Serial.print(" to register 0x");
-      Serial.println(reg, HEX);
+      debug("write 0x%h to register 0x%h", value, reg);
 
       registers[reg] = value;
      }break;
@@ -165,19 +200,10 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     }
    }break;
 
-  /* button event */
-  case ID_BUTTON_EVENT:
-   {Serial.println("Button Event");
-    // TODO
-   }break;
-
   default:
     error("unknown message ID 0x%.2hhX", header.type);
     break;
   }
-
-  digitalWrite(PIN_LIGHT, registers[REG_LIGHT]);
-  analogWrite(PIN_SOUND, registers[REG_SOUND]);
 }
 
 /* pair: pair the button with the server */
@@ -198,11 +224,8 @@ bool pair(void)
    *  goto begin.
    */
 
-  // send a disconnect message to the current parent, to make sure our old name is freed
-  RF24NetworkHeader discon_header(parent, ID_DISCONNECT);
-  byte discon_msg[32] = "";
-  network.write(discon_header, discon_msg, sizeof(discon_msg));
-  delay(50);
+  // store our old name
+  uint16_t old_name = this_node;
 
   // Node 01 is reserved for pairing
   network.begin(01);
@@ -210,7 +233,7 @@ bool pair(void)
   // make sure there is a server to pair with
   if (ping())
   {
-    Serial.println("requesting new address!");
+    debug("requesting new address!");
 
     // request to pair with the server
     RF24NetworkHeader pair_header(parent, ID_PAIR);
@@ -224,7 +247,7 @@ bool pair(void)
     network.update();
     while (!network.available())
     {
-      Serial.println(millis() - pairing_begin);
+      debug("%lu", millis() - pairing_begin);
       if (millis() - pairing_begin > PAIRING_TIMEOUT)
       {
         got_pair_response = false;
@@ -237,34 +260,48 @@ bool pair(void)
     {
       // receive our new address
       uint16_t address = 0;
+      uint8_t  team    = 0;
+      byte addr_data[sizeof(address) + sizeof(team)] = { 0 };
+
       RF24NetworkHeader recv_header;
-      network.read(recv_header, &address, sizeof(address));
-      Serial.print("new address is ");
-      Serial.println(address);
-  
+      network.read(recv_header, &addr_data, sizeof(addr_data));
+
+      memcpy(&address, addr_data, sizeof(address));
+      memcpy(&team, addr_data + sizeof(address), sizeof(team));
+
+      debug("new address is %d on team %d", address, team);
+
       // set our new address
       network.begin(address);
-      this_node = address;
+      network.multicastLevel(team);
   
       // ensure we can connect to the server with our new address
       if (ping())
       {
+        // send a disconnect message to the current parent, to free our old name
+        RF24NetworkHeader discon_header(parent, ID_DISCONNECT);
+        byte discon_msg[32];
+        memcpy (discon_msg, &old_name, sizeof(old_name));
+        network.write(discon_header, discon_msg, sizeof(discon_msg));
+
+        this_node = address;
+        this_team = team;
         return true;
       }
       else
       {
-        Serial.println("Didn't receive pong after setting new address");
+        debug("Didn't receive pong after setting new address");
       }
     }
     else
     {
-      Serial.println("Didn't receive new address");
+      debug("Didn't receive new address");
     }
   }
   // we were not acknowledged
   else
   {
-    Serial.println("Server pong timed out!");
+    debug("Server pong timed out!");
   }
 
   return false;
@@ -279,7 +316,7 @@ bool ping(void)
   RF24NetworkHeader ping_header(parent, ID_PING);
   char ping[32] = "ping";
   network.write(ping_header, ping, sizeof(ping));
-  Serial.println("Ping!");
+  debug("Ping!");
 
   unsigned long start = millis();
 
@@ -291,7 +328,7 @@ bool ping(void)
     network.update();
     if (millis() - start > PING_TIMEOUT)
     {
-      Serial.println("ping() -- didn't receive a pong");
+      debug("ping() -- didn't receive a pong");
       return false;
     }
   }
@@ -301,7 +338,7 @@ bool ping(void)
   char pong[32];
   network.read(pong_header, &pong, sizeof(pong));
 
-  Serial.println("ping() -- got a pong");
+  debug("ping() -- got a pong");
   return true;
 }
 

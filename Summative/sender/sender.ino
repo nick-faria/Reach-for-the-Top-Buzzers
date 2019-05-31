@@ -10,20 +10,21 @@
  * sent out to the buttons.
  *
  */
-
 /* TODO:
- *  - Send button presses to the computer
- *  - Add a button to start the pairing process
- *  - Start using the Arduino Mega
- *   (NOTE -- you seemingly can't change which pins are used for
- *    SPI, rendering the Mega pointless)
  */
 
+#include <SPI.h>
 #include <RF24Network.h>
 #include <RF24.h>
-#include <SPI.h>
 
 #include <button_radio.h>
+
+/* TODO: set this to 1 in deployment!
+ * disable the debug and error messages so they don't get sent to the host */
+#if 0
+#define debug(fmt, ...) ({ })
+#define error(fmt, ...) ({ })
+#endif
 
 
 /* ==[ VARIABLES ]== */
@@ -33,7 +34,8 @@ enum
   PIN_CE  = 7,
   PIN_CSN = 8,
 
-  PIN_PAIR_BTN = 5,
+  PIN_PAIR_BTN_TEAM_1 = 5,
+  PIN_PAIR_BTN_TEAM_2 = 4,
 };
 
 
@@ -42,16 +44,18 @@ RF24Network network(radio);
 
 uint16_t const this_node = 00;
 
-uint16_t children[4] = { };
-unsigned child_count = 0;
+size_t const MAXIMUM_CHILDREN = 4;
+uint16_t children[2][MAXIMUM_CHILDREN] = { { }, { } };
+unsigned child_count[2] = { 0, 0 };
 
 unsigned long const PAIRING_MODE_TIMEOUT = 10000;
 bool in_pairing_mode = false;
 unsigned long pairing_mode_start_time = 0;
+int pairing_team = 0;
 
+uint8_t button_mask = 0x00;
 
-/* ==[ FUNCTIONS ]== */
-uint16_t next_child(void);
+int pressed_button = -1;
 
 
 
@@ -62,62 +66,49 @@ void setup()
   network.begin(this_node);
   radio.setDataRate(RF24_2MBPS);
 
-  pinMode(PIN_PAIR_BTN, INPUT_PULLUP);
+  pinMode(PIN_PAIR_BTN_TEAM_1, INPUT_PULLUP);
+  pinMode(PIN_PAIR_BTN_TEAM_2, INPUT_PULLUP);
+
+  debug("Initialized");
 }
 
 static byte counter = 0x08;
 static int delta = 8;
 static byte led_state = 0;
+static unsigned long note_change_time = 0;
 
 void loop()
 {
   network.update();
 
-  /* receive messages */
+  /* receive messages from the network */
   while (network.available())
   {
     /* read the message from the network */
     RF24NetworkHeader header;
     char message[32];
     network.read(header, &message, 32);
-    Serial.print("Received ");
-    Serial.println(message);
+    debug("Received '%s'", message);
 
-    interpret_message(header, message);
+    interpret_message(header, (byte *)message);
   }
 
-
-  /* send messages */
-  for (unsigned i = 0; i < child_count; ++i)
+  /* receive messages from the computer; these are always just a button mask, and are only
+     sent at the start of a new question */
+  while (Serial.available())
   {
-    {
-    RF24NetworkHeader header(children[i], ID_INSTRUCTION);
+    byte serial_msg = Serial.read();
+    button_mask = serial_msg;
 
-    Instruction inst(OP_WRITE_REGISTER);
-    inst.data[0] = REG_SOUND;
-    inst.data[1] = counter;
-
+    /* these messages mark the beginning of a new question */
+    Instruction inst(OP_NEW_QUESTION);
     int msg_size = 0;
     byte *msg = inst.to_message(&msg_size);
 
-    network.write(header, msg, msg_size);
-    delayMicroseconds(300);
+    RF24NetworkHeader header(00, ID_INSTRUCTION);
+    network.multicast(header, msg, msg_size, 0);
+    network.multicast(header, msg, msg_size, 1);
     delete[] msg;
-    }
-    {
-    RF24NetworkHeader header(children[i], ID_INSTRUCTION);
-
-    Instruction inst(OP_WRITE_REGISTER);
-    inst.data[0] = REG_LIGHT;
-    inst.data[1] = led_state;
-
-    int msg_size = 0;
-    byte *msg = inst.to_message(&msg_size);
-
-    network.write(header, msg, msg_size);
-    delayMicroseconds(300);
-    delete[] msg;
-    }
   }
 
   if (counter >= 0xff - 8  || counter <= 0)
@@ -126,25 +117,38 @@ void loop()
 
     led_state = led_state? 0 : 1;
   }
-  counter += delta;
+  if (millis() - note_change_time >= 500)
+  {
+    counter += delta;
+    note_change_time = millis();
+  }
 
+
+  // read each pairing button
+  int team_1_pair = digitalRead(PIN_PAIR_BTN_TEAM_1) == LOW,
+      team_2_pair = digitalRead(PIN_PAIR_BTN_TEAM_2) == LOW;
 
   // enter pairing mode if pairing button is clicked
-  if (digitalRead(PIN_PAIR_BTN) == LOW)
+  if (team_1_pair && team_2_pair)
+  {
+    debug("Can't pair both teams simultaneously!");
+  }
+  if (team_1_pair || team_2_pair)
   {
     in_pairing_mode = true;
     pairing_mode_start_time = millis();
-    Serial.println("Entering pairing mode");
+    pairing_team = team_1_pair? 0 : 1;
+    debug("Entering pairing mode (Team %d)", pairing_team + 1);
   }
 
   // exit pairing mode after a certain timeframe
   if (in_pairing_mode && millis() - pairing_mode_start_time > PAIRING_MODE_TIMEOUT)
   {
     in_pairing_mode = false;
-    Serial.println("Leaving pairing mode");
+    debug("Leaving pairing mode");
   }
 
-  delay(50);
+  delay(100);
 }
 
 
@@ -201,69 +205,59 @@ void interpret_message(RF24NetworkHeader header, byte *message)
 {
   switch(header.type)
   {
-  /* instruction */
-  case ID_INSTRUCTION:
-   {
-    byte opcode = message[1];
-    switch (opcode)
-    {
-    /* mark a new question */
-    case OP_NEW_QUESTION:
-     {Serial.println("New Question");
-     }break;
-
-    /* write to a register */
-    case OP_WRITE_REGISTER:
-     {byte reg   = message[2],
-           value = message[3];
-
-      Serial.print("write 0x");
-      Serial.print(value, HEX);
-      Serial.print(" to register 0x");
-      Serial.println(reg, HEX);
-     }break;
-    
-    default:
-      error("unknown opcode %.2hhX", opcode);
-      break;
-    }
-   }break;
-
   /* button event */
   case ID_BUTTON_EVENT:
-   {Serial.println("Button Event");
+   {
+    debug("Button Event");
     ButtonEvent e;
+
+    int team   = 0,
+        player = 0;
 
     // read the message into the event object
     size_t offset = 1;
     memcpy (&e.time_ms, message + offset, sizeof(e.time_ms));
     offset += sizeof(e.time_ms);
     memcpy (&e.time_ms, message + offset, sizeof(e.time_us));
-    offset += sizeof(e.time_us);
-    e.team   = message[offset];
-    e.player = message[offset+1];
 
-    // TODO -- send the event to the computer
-    Serial.print("Event occurred at ");
-    Serial.print(e.time_ms);
-    Serial.print("ms, ");
-    Serial.print(e.time_us);
-    Serial.print("us, player #");
-    Serial.print(e.player);
-    Serial.print(" on team #");
-    Serial.print(e.team);
-    Serial.println(".");
+    for (int team = 0; team < 2; ++team)
+    {
+      for (int i = 0; i < MAXIMUM_CHILDREN; ++i)
+      {
+        if (children[team][i] == header.from_node)
+        {
+          team = team;
+          player = i;
+          goto buttonevent_done_searching_for_child;
+        }
+      }
+    }
+buttonevent_done_searching_for_child:
+
+    uint8_t button_number = (team * 4) + player;
+
+    // make sure  this button isn't masked off
+    if (button_mask & ( 1 << button_number ) != 0)
+    {
+      // we haven't sent an event to the computer yet, so send this one
+      if (pressed_button == -1)
+      {
+        pressed_button = button_number;
+      }
+    }
+
+    debug("Event occurred at %lums, %luus, player #%d on team #%d.",
+          e.time_ms, e.time_us, player + 1, team + 1);
    }break;
 
   case ID_PING:
-   {Serial.print("Got '");
-    Serial.print((char*)message);
-    Serial.println("'");
+   {
+    debug("Got '%s'", (char*)message);
 
     RF24NetworkHeader response_header(header.from_node, ID_PING);
     char pong_msg[32] = "pong";
     network.write(response_header, pong_msg, sizeof(pong_msg));
-    Serial.println("Pong!");
+    debug("Pong!");
 
     RF24NetworkHeader null_header;
     byte null_msg[32];
@@ -271,42 +265,68 @@ void interpret_message(RF24NetworkHeader header, byte *message)
    }break;
 
   case ID_PAIR:
-   {Serial.println("Pairing request received");
+   {
+    debug("Pairing request received");
     if (in_pairing_mode)
     {
-      uint16_t addr = next_child();
+      // make sure there's space on the team
+      if (child_count[pairing_team] < MAXIMUM_CHILDREN)
+      {
+        uint16_t addr = next_child();
+    
+        RF24NetworkHeader response_header(01, ID_PAIR);
+        char pair_msg[32] = { (char)(addr & 0xFF), (char)((addr >> 8) & 0xFF),
+                              (char)pairing_team & 0xFF };
+        network.write(response_header, pair_msg, sizeof(pair_msg));
   
-      RF24NetworkHeader response_header(01, ID_PAIR);
-      char pair_msg[32] = { addr & 0xFF, (addr >> 8) & 0xFF, 0 };
-      network.write(response_header, pair_msg, sizeof(pair_msg));
-  
-      children[child_count++] = addr;
-  
-      Serial.print("New child is @ ");
-      Serial.println(addr);
+        children[pairing_team][child_count[pairing_team]++] = addr;
+    
+        debug("New child is @ %d on team %d", addr, pairing_team);
+      }
+      else
+      {
+        error("Can't pair -- team %d is full!", pairing_team + 1);
+      }
     }
     else
     {
-      Serial.println("Not in pairing mode!");
+      error("Can't pair -- not in pairing mode!");
     }
    }break;
 
   case ID_DISCONNECT:
-   {Serial.println("Disconnect message received");
-    // TODO -- properly remove the child
-    child_count--;
+   {
+    debug("Disconnect message received");
 
-    RF24NetworkHeader null_header;
-    byte null_msg[32];
-    network.read(null_header, &null_msg, sizeof(null_msg));
+    // get the address to remove
+    uint16_t discon_addr = 0;
+    memcpy(&discon_addr, message, sizeof(discon_addr));
+
+    debug("address to remove is %d", discon_addr);
+
+    // try to remove the child
+    for (int team = 0; team < 2; ++team)
+    {
+      for (int i = 0; i < child_count[team]; ++i)
+      {
+        if (children[team][i] == discon_addr)
+        {
+          debug("removing child #%d", discon_addr);
+          children[team][i] = 0;
+  
+          memmove(children[team] + i , children[team] + i + 1, child_count[team] - i - 1);
+          child_count[team]--;
+          goto disconnect_done_searching_for_child;
+        }
+      }
+    }
+disconnect_done_searching_for_child:
+    ;
    }break;
 
   default:
-    error("unknown message ID 0x%.2hhX", header.type);
+    error("Unknown or invalid message type 0x%.2hhX", header.type);
     break;
   }
 }
-
-
-
 

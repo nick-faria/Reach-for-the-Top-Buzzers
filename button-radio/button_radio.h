@@ -16,10 +16,10 @@
 enum ID_Types
 {
   ID_INSTRUCTION  = 0x00,
-  ID_BUTTON_EVENT = 0x01,
-  ID_PING         = 0x02,
-  ID_PAIR         = 0x03,
-  ID_DISCONNECT   = 0x04,
+  ID_BUTTON_EVENT,
+  ID_PING,
+  ID_PAIR,
+  ID_DISCONNECT,
 };
 
 /* Opcodes:
@@ -55,24 +55,18 @@ class ButtonEvent
 public:
   uint32_t time_ms;
   uint32_t time_us;
-  byte team;
-  byte player;
 
   byte *to_message(int *msg_size);
 
   ButtonEvent()
  : time_ms(0),
-   time_us(0),
-   team(0),
-   player(0)
+   time_us(0)
   {
   }
 
   ButtonEvent(int _team, int _player)
  : time_ms(millis()),
-   time_us(micros() % 1000),
-   team(_team),
-   player(_player)
+   time_us(micros() % 1000)
   {
   }
 };
@@ -103,6 +97,7 @@ public:
 
 
 /* ==[ FUNCTIONS ]== */
+void debug(char const *const format, ...);
 void error(char const *const format, ...);
 
 
