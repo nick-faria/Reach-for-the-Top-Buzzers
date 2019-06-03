@@ -5,27 +5,31 @@ QUESTION_TYPES = ["OpenTopic", "Assign", "WhoWhat", "Tiebreak", "Shootout", "Tea
 ##*REWRITE METHOD CALLING
 
 from GUI import *
-import pyonLIB.py as Serial
+#import pyonLIB.py as Serial
+from pyonLIB import *
 
-from parse import *
+from Parser import *
+
+global GUI
+global ENDQUESTION
+global FIRSTBUTTON
+global SCORE;
 
 filename = "test.txt"
 
-SERCOM=Serial.SERCOM()
+SERCOM=SERCOM(1)
 
-gui = GraphicalUserInterface(600, 450, WHITE)
+GUI = GraphicalUserInterface(600, 450, WHITE)
 
-endQuestion = False
-firstButton = None
+ENDQUESTION = False
+FIRSTBUTTON = None
 
-global gui
-global endQuestion
-global firstButton
+
 
 questionTypes = ["OPEN QUESTION", "TEAM QUESTION", "whowhat", "ASSIGNED QUESTION", "SHOOTOUT",  "TIE-BREAKERS IF NECESSARY", "WORD SCRAMBLE"]
 
-score = [0, 0, 0, 0, 0, 0, 0, 0];
-global score;
+SCORE = [0, 0, 0, 0, 0, 0, 0, 0];
+
 
 questions = readinput
 
@@ -33,48 +37,50 @@ questions = readinput
 
 def receiveFirstButton():
 
-    firstButton = SERCOM.read()
-    if firstButton != None:
-        firstButton += 1
+    FIRSTBUTTON = SERCOM.read()
+    if FIRSTBUTTON != None:
+        FIRSTBUTTON += 1
     SERCOM.clear()
-    return firstButton
+    return FIRSTBUTTON
 
 def sendEligibleBuzzers(buzzers):
 
     SERCOM.write(buzzers)
 
-def updateScore(button, points)
-    score[button -1] += points
+def updateScore(button, points):
+    SCORE[button -1] += points
 
 def sendQ(question):
-    gui.text_fields.get('question_text').update_text(question)
+    GUI.text_fields.get('question_text').update_text(question)
 
 def sendA(answer):
-    gui.text_fields.get('answer_text').update_text(answer)
+    GUI.text_fields.get('answer_text').update_text(answer)
 
 def sendScore():
-    gui.text_fields.get('basic_scores').update_text(repr(score))
+    GUI.text_fields.get('basic_SCOREs').update_text(repr(SCORE))
 
 def sendPoints(points):
-    gui.text_fields.get('points').update_text("Points: " + str(points))
+    GUI.text_fields.get('points').update_text("Points: " + str(points))
 
 def sendTopic(topic, questionType):
-    gui.text_fields.get('question_type_and_topic').update_text(questionType + ": " + topic)
+    GUI.text_fields.get('question_type_and_topic').update_text(questionType + ": " + topic)
 
 def unansweredLoop():
-    firstButton = receiveFirstButton()
-    while firstButton == None and endQuestion == False:
-        gui.check_events()
-        if gui.user_mouse_input:
-            if gui.user_mouse_input == "ShowAnswer":
-                endQuestion == True
-                gui.update_state("NoPointsShowAnswer")
-            gui.user_mouse_input = None
-        firstButton = receiveFirstButton()
+    FIRSTBUTTON = receiveFirstButton()
+    while FIRSTBUTTON == None and ENDQUESTION == False:
+        GUI.check_events()
+        if GUI.user_mouse_input:
+            if GUI.user_mouse_input == "ShowAnswer":
+                ENDQUESTION == True
+                GUI.update_state("NoPointsShowAnswer")
+            GUI.user_mouse_input = None
+        FIRSTBUTTON = receiveFirstButton()
 
 def receiveAnswerCheck():
+    pass
     
 def finishQuestion():
+    pass
 
 def openQuestion(question):
 
@@ -84,25 +90,25 @@ def openQuestion(question):
     nQuestions = question[3]
     
     for q in range(0, nQuestions*2 -2, 2):
-        gui.start_new_question("OpenTopic")
+        GUI.start_new_question("OpenTopic")
         sendEligibleBuzzers([[1,1,1,1,1,1,1,1]])
         sendQ(question[4 + q])
         sendA(question[5 + q])
         sendPoints(points)
         sendTopic(topic)
         answerCount = 0
-        endQuestion = False
+        ENDQUESTION = False
         unansweredLoop()
-        while answerCount < 2 and endQuestion == False:
+        while answerCount < 2 and ENDQUESTION == False:
             if receiveAnswerCheck():
-                updateScore(firstButton, points)
+                updateScore(FIRSTBUTTON, points)
                 sendScore()
                 answerCount = 2;
             else:
-                if firstButton >= 5:
+                if FIRSTBUTTON >= 5:
                     sendEligibleBuzzers([[1,1,1,1,0,0,0,0]])
                     unansweredLoop()
-                if firstButton <= 4:
+                if FIRSTBUTTON <= 4:
                     sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                     unansweredLoop()
                 answerCount +=1;
@@ -115,24 +121,24 @@ def teamQuestion(question):
     sendA(question[3])
     sendEligibleBuzzers([[1,1,1,1,1,1,1,1]])
     sendTopic("Scramble")
-    endQuestion = False
+    ENDQUESTION = False
     scrambleWinner = -1
     unansweredLoop()
 
-    while answerCount < 2 and endQuestion == False:
+    while answerCount < 2 and ENDQUESTION == False:
         if receiveAnswerCheck():
-            if firstButton <= 4:
+            if FIRSTBUTTON <= 4:
                 scrambleWinner = 0
-            if firstButton > 4:
+            if FIRSTBUTTON > 4:
                 scrambleWinner = 1
-            updateScore(firstButton, points)
+            updateScore(FIRSTBUTTON, points)
             sendScore()
             answerCount = 2;
         else:
-            if firstButton >= 5:
+            if FIRSTBUTTON >= 5:
                 sendEligibleBuzzers([[1,1,1,1,0,0,0,0]])
                 unansweredLoop()
-            if firstButton <= 4:
+            if FIRSTBUTTON <= 4:
                 sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                 unansweredLoop()
             answerCount +=1;
@@ -145,18 +151,18 @@ def teamQuestion(question):
             sendPoints(10)
             sendTopic(topic)
             answerCount = 0
-            endQuestion = False
+            ENDQUESTION = False
             unansweredLoop()
-            while answerCount < 2 and endQuestion = False:
+            while answerCount < 2 and ENDQUESTION == False:
                 if receiveAnswerCheck():
-                    updateScore(firstButton, points)
+                    updateScore(FIRSTBUTTON, points)
                     sendScore()
                     answerCount = 2;
                 else:
-                    if firstButton >= 5:
+                    if FIRSTBUTTON >= 5:
                         sendEligibleBuzzers([[1,1,1,1,0,0,0,0]])
                         unansweredLoop()
-                    if firstButton <= 4:
+                    if FIRSTBUTTON <= 4:
                         sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                         unansweredLoop()
                     answerCount +=1;
@@ -170,10 +176,10 @@ def teamQuestion(question):
             sendA(question[5 + q])
             sendPoints(10)
             sendTopic(topic)
-            endQuestion = False
+            ENDQUESTION = False
             unansweredLoop()
             if receiveAnswerCheck():
-                updateScore(firstButton, points)
+                updateScore(FIRSTBUTTON, points)
                 sendScore()
             else:
                 ()
@@ -187,7 +193,7 @@ def whoAmIQuestion(question):
     sendTopic("")
     sendPoints(40)
     answered = False
-    endQuestion = False
+    ENDQUESTION = False
     
     for c in range(0, 6, 2):
         if answered == True:
@@ -198,16 +204,16 @@ def whoAmIQuestion(question):
         sendTopic("")
         answerCount = 0;
         unansweredLoop()
-        while answerCount < 2 and endQuestion = False:
+        while answerCount < 2 and ENDQUESTION == False:
             if receiveAnswerCheck():
-                updateScore(firstButton, 40 - 10*(q/2))
+                updateScore(FIRSTBUTTON, 40 - 10*(q/2))
                 sendScore()
                 answered = True
             else:
-                if firstButton >= 5:
+                if FIRSTBUTTON >= 5:
                     sendEligibleBuzzers([[1,1,1,1,0,0,0,0]])
                     unansweredLoop()
-                if firstButton <= 4:
+                if FIRSTBUTTON <= 4:
                     sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                     unansweredLoop()
                 answerCount +=1;
@@ -254,7 +260,7 @@ def shootoutQuestion(question):
     nQuestions = question[1]
     sendPoints(10)
     sendTopic("")
-    checkWin = False:
+    checkWin = False
     for q in range(0, nQuestions*2 -2, 2):
         winCondition = 4
         for a in range(4):
@@ -282,16 +288,16 @@ def shootoutQuestion(question):
         sendQ(question[2 + q])
         sendA(question[3 + q])
         answerCount = 0
-        endQuestion = False
+        ENDQUESTION = False
         if checkWin == True:
             break
         unansweredLoop()
-        while answerCount < 2 and endQuestion == False:
+        while answerCount < 2 and ENDQUESTION == False:
             if receiveAnswerCheck():
-                answeredBuzzers[firstButton] = 1
+                answeredBuzzers[FIRSTBUTTON] = 1
                 answerCount = 2
             else:
-                if firstButton >= 5:
+                if FIRSTBUTTON >= 5:
                     eligibleBuzzers = [[1,1,1,1,0,0,0,0][i] - answeredBuzzers[i] for i in range(8)]
                     for i in eligibleBuzzers:
                         if i == -1:
@@ -299,7 +305,7 @@ def shootoutQuestion(question):
                     sendEligibleBuzzers([eligibleBuzzers])
                     unansweredLoop()
                     
-                if firstButton <= 4:
+                if FIRSTBUTTON <= 4:
                     eligibleBuzzers = [[0,0,0,0,1,1,1,1][i] - answeredBuzzers[i] for i in range(8)]
                     for i in eligibleBuzzers:
                         if i == -1:
@@ -323,17 +329,17 @@ def tiebreaker(question):
         sendQ(question[4 + q])
         sendA(question[5 + q])
         answerCount = 0
-        endQuestion = False
+        ENDQUESTION = False
         winCondition = False
         unansweredLoop()
-        while answerCount < 2 and endQuestion == False:
+        while answerCount < 2 and ENDQUESTION == False:
             if receiveAnswerCheck():
                 winCondition = True
             else:
-                if firstButton >= 5:
+                if FIRSTBUTTON >= 5:
                     sendEligibleBuzzers([[1,1,1,1,0,0,0,0]])
                     unansweredLoop()
-                if firstButton <= 4:
+                if FIRSTBUTTON <= 4:
                     sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                     unansweredLoop()
                 answerCount +=1;
@@ -341,6 +347,7 @@ def tiebreaker(question):
             break
 
 def wordscramble(question):
+    pass
     
 
 questionMethods = [openQuestion, teamQuestion, whowhatQuestion, assignedQuestion, shootoutQuestion, tiebreaker, wordscramble]
