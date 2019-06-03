@@ -95,7 +95,7 @@ class GraphicalUserInterface:
                 self.text_fields['basic_scores']            = TextField(self, 0.025, 0.625 , 0.6  , 0.35  , '...'                                         , None, BLACK, BLACK, 'opensans', 42 , None, True , False, True , 'center', 'center')
 
             else:
-                raise Exception # StateNotFound
+                raise NameError('State passed to GUI at start of question does not exist')
 
             # Updates the text passed
             for field in text_to_update:
@@ -152,7 +152,7 @@ class GraphicalUserInterface:
             self.show_hide_fields(visibility)
             self.render()
         else:
-            raise Exception
+            raise NameError('State passed to GUI when updating layout does not exist')
 
     def show_hide_fields(self, status = dict()):
         ''' Updates the visibility of each of the fields passed'''
@@ -319,13 +319,13 @@ class TextField:
 
         #### Sets the horizontal position of the text, based on its alignment
         if self.horz_alignment == 'left':
-            self.text_x = self.x + 2*self.outline_width
+            self.text_x = self.x + 2 * self.outline_width
         elif self.horz_alignment in ['center', 'centre']:
-            self.text_x = self.x + (self.width - self.rtext.get_width())/2
+            self.text_x = self.x + (self.width - self.rtext.get_width()) / 2
         elif self.horz_alignment == 'right':
-            self.text_x = self.x + self.width - self.rtext.get_width() - 2*self.outline_width
+            self.text_x = self.x + self.width - self.rtext.get_width() - 2 * self.outline_width
         else:
-            raise Exception ##alignmentNotFoundError
+            raise NameError('Horizontal Alignment passed to TextField constuctor does not exist')
 
         if self.vert_alignment == 'top':
             self.text_y = self.y + self.outline_width
@@ -334,10 +334,7 @@ class TextField:
         elif self.vert_alignment == 'bottom':
             self.text_y = self.y + self.height - self.rtext.get_height() - self.outline_width
         else:
-            raise Exception ##alignmentNotFoundError
-        
-        ## Sets the vertical position of the text
-        ##self.text_y = self.y + self.outline_width
+            raise NameError('Horizontal Alignment passed to TextField constuctor does not exist')
 
     def render(self):
         ''' Draws the text field to the provided GUI (including background, border, text as necesary)'''
@@ -356,8 +353,8 @@ class TextField:
                 ## draws the text based on pos set in previous conditional
                 self.gui.window.blit(self.rtext, (self.text_x, self.text_y))
 
-    def click(self, gui):
+    def click(self):
         ''' Updates the GUI based on mouse input from the reader '''
 
         if self.user_input:
-            gui.user_mouse_input = self.user_input
+            self.gui.user_mouse_input = self.user_input
