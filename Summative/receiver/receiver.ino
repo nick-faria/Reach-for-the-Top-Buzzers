@@ -107,7 +107,7 @@ void loop()
         can_be_pressed = false;
         RF24NetworkHeader header(parent, ID_BUTTON_EVENT);
     
-        ButtonEvent btn_event(0, 0);
+        ButtonEvent btn_event(this_team, this_player);
         int msg_size = 0;
         byte *msg = btn_event.to_message(&msg_size);
     
@@ -136,11 +136,14 @@ void loop()
     /* hold our previous address, so we can reuse
      * our old address if we fail to pair */
     uint16_t previous_address = this_node;
+    uint8_t  previous_team    = this_team;
     if (!pair())
     {
       debug("Failed to pair!");
       this_node = previous_address;
+      this_team = previous_team;
       network.begin(this_node);
+      network.multicastLevel(this_team);
     }
     else
     {
@@ -224,23 +227,23 @@ bool pair(void)
    *  goto begin.
    */
 
-  // store our old name
+  /* store our old name */
   uint16_t old_name = this_node;
 
-  // Node 01 is reserved for pairing
+  /* Node 01 is reserved for pairing */
   network.begin(01);
 
-  // make sure there is a server to pair with
+  /* make sure there is a server to pair with */
   if (ping())
   {
     debug("requesting new address!");
 
-    // request to pair with the server
+    /* request to pair with the server */
     RF24NetworkHeader pair_header(parent, ID_PAIR);
     char pair_msg[32] = "";
     network.write(pair_header, pair_msg, sizeof(pair_msg));
 
-    // wait for the pairing message from the server
+    /* wait for the pairing message from the server */
     bool got_pair_response = true;
     unsigned long const PAIRING_TIMEOUT = 1000;
     unsigned long pairing_begin = millis();
@@ -258,7 +261,7 @@ bool pair(void)
 
     if (got_pair_response)
     {
-      // receive our new address
+      /* receive our new address */
       uint16_t address = 0;
       uint8_t  team    = 0;
       byte addr_data[sizeof(address) + sizeof(team)] = { 0 };
@@ -271,14 +274,14 @@ bool pair(void)
 
       debug("new address is %d on team %d", address, team);
 
-      // set our new address
+      /* set our new address */
       network.begin(address);
       network.multicastLevel(team);
   
-      // ensure we can connect to the server with our new address
+      /* ensure we can connect to the server with our new address */
       if (ping())
       {
-        // send a disconnect message to the current parent, to free our old name
+        /* send a disconnect message to the current parent, to free our old name */
         RF24NetworkHeader discon_header(parent, ID_DISCONNECT);
         byte discon_msg[32];
         memcpy (discon_msg, &old_name, sizeof(old_name));
@@ -298,7 +301,7 @@ bool pair(void)
       debug("Didn't receive new address");
     }
   }
-  // we were not acknowledged
+  /* we were not acknowledged */
   else
   {
     debug("Server pong timed out!");
@@ -312,7 +315,7 @@ bool ping(void)
 {
   unsigned long const PING_TIMEOUT = 1000;
 
-  // try to ping the server
+  /* try to ping the server */
   RF24NetworkHeader ping_header(parent, ID_PING);
   char ping[32] = "ping";
   network.write(ping_header, ping, sizeof(ping));
@@ -321,7 +324,7 @@ bool ping(void)
   unsigned long start = millis();
 
 
-  // wait for the pong from the server
+  /* wait for the pong from the server */
   network.update();
   while (!network.available())
   {
@@ -333,7 +336,7 @@ bool ping(void)
     }
   }
 
-  // receive the pong from the server
+  /* receive the pong from the server */
   RF24NetworkHeader pong_header;
   char pong[32];
   network.read(pong_header, &pong, sizeof(pong));

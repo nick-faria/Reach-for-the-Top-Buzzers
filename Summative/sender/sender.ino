@@ -99,6 +99,7 @@ void loop()
   {
     byte serial_msg = Serial.read();
     button_mask = serial_msg;
+    pressed_button = -1;
 
     /* these messages mark the beginning of a new question */
     Instruction inst(OP_NEW_QUESTION);
@@ -111,29 +112,16 @@ void loop()
     delete[] msg;
   }
 
-  if (counter >= 0xff - 8  || counter <= 0)
-  {
-    delta *= -1;
-
-    led_state = led_state? 0 : 1;
-  }
-  if (millis() - note_change_time >= 500)
-  {
-    counter += delta;
-    note_change_time = millis();
-  }
-
-
-  // read each pairing button
+  /* read each pairing button */
   int team_1_pair = digitalRead(PIN_PAIR_BTN_TEAM_1) == LOW,
       team_2_pair = digitalRead(PIN_PAIR_BTN_TEAM_2) == LOW;
 
-  // enter pairing mode if pairing button is clicked
+  /* enter pairing mode if pairing button is clicked */
   if (team_1_pair && team_2_pair)
   {
     debug("Can't pair both teams simultaneously!");
   }
-  if (team_1_pair || team_2_pair)
+  else if (team_1_pair || team_2_pair)
   {
     in_pairing_mode = true;
     pairing_mode_start_time = millis();
@@ -141,7 +129,7 @@ void loop()
     debug("Entering pairing mode (Team %d)", pairing_team + 1);
   }
 
-  // exit pairing mode after a certain timeframe
+  /* exit pairing mode after a certain timeframe */
   if (in_pairing_mode && millis() - pairing_mode_start_time > PAIRING_MODE_TIMEOUT)
   {
     in_pairing_mode = false;
@@ -214,7 +202,7 @@ void interpret_message(RF24NetworkHeader header, byte *message)
     int team   = 0,
         player = 0;
 
-    // read the message into the event object
+    /* read the message into the event object */
     size_t offset = 1;
     memcpy (&e.time_ms, message + offset, sizeof(e.time_ms));
     offset += sizeof(e.time_ms);
@@ -236,10 +224,10 @@ buttonevent_done_searching_for_child:
 
     uint8_t button_number = (team * 4) + player;
 
-    // make sure  this button isn't masked off
+    /* make sure  this button isn't masked off */
     if (button_mask & ( 1 << button_number ) != 0)
     {
-      // we haven't sent an event to the computer yet, so send this one
+      /* we haven't sent an event to the computer yet, so send this one */
       if (pressed_button == -1)
       {
         pressed_button = button_number;
@@ -269,7 +257,7 @@ buttonevent_done_searching_for_child:
     debug("Pairing request received");
     if (in_pairing_mode)
     {
-      // make sure there's space on the team
+      /* make sure there's space on the team */
       if (child_count[pairing_team] < MAXIMUM_CHILDREN)
       {
         uint16_t addr = next_child();
@@ -292,19 +280,22 @@ buttonevent_done_searching_for_child:
     {
       error("Can't pair -- not in pairing mode!");
     }
+    RF24NetworkHeader null_header;
+    byte null_msg[32];
+    network.read(null_header, &null_msg, sizeof(null_msg));
    }break;
 
   case ID_DISCONNECT:
    {
     debug("Disconnect message received");
 
-    // get the address to remove
+    /* get the address to remove */
     uint16_t discon_addr = 0;
     memcpy(&discon_addr, message, sizeof(discon_addr));
 
     debug("address to remove is %d", discon_addr);
 
-    // try to remove the child
+    /* try to remove the child */
     for (int team = 0; team < 2; ++team)
     {
       for (int i = 0; i < child_count[team]; ++i)
