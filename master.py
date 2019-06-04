@@ -5,19 +5,14 @@ QUESTION_TYPES = ["OpenTopic", "Assign", "WhoWhat", "Tiebreak", "Shootout", "Tea
 ##*REWRITE METHOD CALLING
 
 from GUI import *
-#import pyonLIB.py as Serial
-from pyonLIB import *
-
+from pyonLib import pyonLIB
 from Parser import *
 
-global GUI
-global ENDQUESTION
-global FIRSTBUTTON
-global SCORE;
+global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
 filename = "test.txt"
 
-SERCOM=SERCOM(1)
+sercom = pyonLIB.SERCOM(1)
 
 GUI = GraphicalUserInterface(600, 450, WHITE)
 
@@ -26,26 +21,23 @@ FIRSTBUTTON = None
 
 
 
-questionTypes = ["OPEN QUESTION", "TEAM QUESTION", "whowhat", "ASSIGNED QUESTION", "SHOOTOUT",  "TIE-BREAKERS IF NECESSARY", "WORD SCRAMBLE"]
+questionTypes = ["OPEN QUESTION", "TEAM QUESTION", "WHO/WHAT AM I", "ASSIGNED QUESTION", "SHOOTOUT",  "TIE-BREAKERS IF NECESSARY", "WORD SCRAMBLE"]
 
 SCORE = [0, 0, 0, 0, 0, 0, 0, 0];
 
-
-questions = readinput
 
 #######
 
 def receiveFirstButton():
 
-    FIRSTBUTTON = SERCOM.read()
+    FIRSTBUTTON = sercom.read()
     if FIRSTBUTTON != None:
         FIRSTBUTTON += 1
-    SERCOM.clear()
+    sercom.clear()
     return FIRSTBUTTON
 
 def sendEligibleBuzzers(buzzers):
-
-    SERCOM.write(buzzers)
+    sercom.write(buzzers)
 
 def updateScore(button, points):
     SCORE[button -1] += points
@@ -60,20 +52,30 @@ def sendScore():
     GUI.text_fields.get('basic_SCOREs').update_text(repr(SCORE))
 
 def sendPoints(points):
-    GUI.text_fields.get('points').update_text("Points: " + str(points))
+    # this is borked, GUI.text_fields.get('points') is returning None
+    #GUI.text_fields.get('points').update_text("Points: " + str(points))
+    pass
 
 def sendTopic(topic, questionType):
     GUI.text_fields.get('question_type_and_topic').update_text(questionType + ": " + topic)
 
 def unansweredLoop():
     FIRSTBUTTON = receiveFirstButton()
+    ENDQUESTION = False
     while FIRSTBUTTON == None and ENDQUESTION == False:
         GUI.check_events()
         if GUI.user_mouse_input:
             if GUI.user_mouse_input == "ShowAnswer":
-                ENDQUESTION == True
+                ENDQUESTION = True
                 GUI.update_state("NoPointsShowAnswer")
-            GUI.user_mouse_input = None
+            elif GUI.user_mouse_input == "Correct":
+                ENDQUESTION = True
+            elif GUI.user_mouse_input == "Incorrect":
+                GUI.update_state("NoPointsShowAnswer")
+                ENDQUESTION = True
+            elif GUI.user_mouse_input == "NextQuestion":
+                ENDQUESTION = True
+        GUI.user_mouse_input = None
         FIRSTBUTTON = receiveFirstButton()
 
 def receiveAnswerCheck():
@@ -83,6 +85,8 @@ def finishQuestion():
     pass
 
 def openQuestion(question):
+    # this function is the only(?) one that works.
+    # the rest seem to be in some kind of invalid state.
 
     points = question[1]
     topic = question[2]
@@ -95,7 +99,7 @@ def openQuestion(question):
         sendQ(question[4 + q])
         sendA(question[5 + q])
         sendPoints(points)
-        sendTopic(topic)
+        sendTopic(topic, "Open Question")
         answerCount = 0
         ENDQUESTION = False
         unansweredLoop()
@@ -115,15 +119,19 @@ def openQuestion(question):
 
 def teamQuestion(question):
 
-    topic = question[1]
+    GUI.start_new_question("Team")
+
+    topic = ""
     sendPoints(10)
     sendQ(question[2])
     sendA(question[3])
     sendEligibleBuzzers([[1,1,1,1,1,1,1,1]])
-    sendTopic("Scramble")
+    sendTopic("", "Scramble")
     ENDQUESTION = False
     scrambleWinner = -1
     unansweredLoop()
+
+    answerCount = 0
 
     while answerCount < 2 and ENDQUESTION == False:
         if receiveAnswerCheck():
@@ -149,7 +157,7 @@ def teamQuestion(question):
             sendQ(question[4 + q])
             sendA(question[5 + q])
             sendPoints(10)
-            sendTopic(topic)
+            sendTopic(topic, "Team Question")
             answerCount = 0
             ENDQUESTION = False
             unansweredLoop()
@@ -175,7 +183,7 @@ def teamQuestion(question):
             sendQ(question[4 + q])
             sendA(question[5 + q])
             sendPoints(10)
-            sendTopic(topic)
+            sendTopic(topic, "Team Question")
             ENDQUESTION = False
             unansweredLoop()
             if receiveAnswerCheck():
@@ -190,7 +198,7 @@ def whoAmIQuestion(question):
     #sendWhowhat()
     answer = question[6]
     sendA(answer)
-    sendTopic("")
+    sendTopic("", "___ Am I?")
     sendPoints(40)
     answered = False
     ENDQUESTION = False
@@ -199,9 +207,9 @@ def whoAmIQuestion(question):
         if answered == True:
             break
         sendEligibleBuzzers([[1,1,1,1,1,1,1,1]])
-        sendQ(question[2 + q])
+        sendQ(question[2 + c])
         sendA(answer)
-        sendTopic("")
+        sendTopic("", "___ Am I?")
         answerCount = 0;
         unansweredLoop()
         while answerCount < 2 and ENDQUESTION == False:
@@ -220,9 +228,10 @@ def whoAmIQuestion(question):
     
 def assignedQuestion(question):
 
+    GUI.start_new_question("Assign")
     topic = question[1]
     sendPoints(10)
-    sendTopic(topic)
+    sendTopic(topic, "Assigned Question")
     
     for q in range(0, 14, 2):
         eligibleBuzzers  = [0,0,0,0,0,0,0,0]
@@ -259,7 +268,7 @@ def shootoutQuestion(question):
     answeredBuzzers = [0,0,0,0,0,0,0,0]
     nQuestions = question[1]
     sendPoints(10)
-    sendTopic("")
+    sendTopic("", "Shootout Question")
     checkWin = False
     for q in range(0, nQuestions*2 -2, 2):
         winCondition = 4
@@ -321,7 +330,7 @@ def tiebreaker(question):
     topic = question[2]
     
     sendPoints(1)
-    sendTopic(topic)
+    sendTopic(topic, "Tiebreaker")
     nQuestions = question[3]
     
     for q in range(0, nQuestions*2 -2, 2):
@@ -350,18 +359,17 @@ def wordscramble(question):
     pass
     
 
-questionMethods = [openQuestion, teamQuestion, whowhatQuestion, assignedQuestion, shootoutQuestion, tiebreaker, wordscramble]
+questionMethods = [openQuestion, teamQuestion, whoAmIQuestion, assignedQuestion, shootoutQuestion, tiebreaker, wordscramble]
 
 def main():
     
-##    questions = parse(filename)
-##        
-##    for question in questions:
-##        for q in questionTypes:
-##            if question[0] == q:
-##            questionMethods[q](question)
+    questions = parse(filename)
+        
+    for question in questions:
+        q = questionTypes.index(question[0])
+        questionMethods[q](question)
 
     sendEligibleBuzzers([[1,0,1,0,1,0,1,0]])
-    SERCOM.close()
+    sercom.close()
 
 main()

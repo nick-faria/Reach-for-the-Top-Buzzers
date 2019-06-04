@@ -2,6 +2,12 @@
 def parse(filename):
     import re
 
+    def isnumeric(s):
+        for c in s:
+            if c not in '0123456789':
+                return False
+        return True
+
     #Returns True if 'text' is a PDF page footer
     def is_footer(text):
         footer = re.compile('.*REACH.*FOR.*THE.*TOP|.*SCHOOLREACH.*PACK.*|Page.*[0-9]+.*of.*[0-9]+')
@@ -20,14 +26,14 @@ def parse(filename):
     # first_int: returns the next number in the text
     def first_int(Text):
         for char in Text:
-            if char.isnumeric():
+            if isnumeric(char):
                 return char
         return 0
 
     # next_character returns the next non-numeric, non-space character in 'ine'                 
     def next_character(line):
         for char in line:
-            if not char.isspace() and not char.isnumeric():
+            if not char.isspace() and not isnumeric(char):
                 return char
 
     def is_question_or_answer_or_clue(text):
@@ -44,7 +50,7 @@ def parse(filename):
         end_multiline = re.compile(filter_)
         while i < len(Text) and end_multiline.match(Text[i]) == None and not is_question_or_answer_or_clue(Text[i]):
             if not is_footer(Text[i]) and not ignore(Text[i]):
-                out += ' ' + Text[i][:-1]
+                out += ' ' + Text[i].strip()
             i += 1
 
         return out, i
@@ -94,7 +100,7 @@ def parse(filename):
             #This handles question types that have topics, such as Open Questions.
             try:
                 tmp = type_.split('-')
-                tmp[1] = tmp[1][:-1]
+                tmp[1] = tmp[1].strip()
 
                 question_type = tmp[0]
                 topic = tmp[1]
@@ -113,14 +119,14 @@ def parse(filename):
             except IndexError:
                 try:
                     # QUESTION TYPE
-                    question_type = type_[:-1]
+                    question_type = type_.strip()
                     if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
                         Temp.append('OPEN QUESTION')
                     else:
                         Temp.append(question_type)
 
                     # NOT WHO/WHAT AM I
-                    if re.compile('.*(WHO|WHAT) AM').match(type_[:-1]) == None:
+                    if re.compile('.*(WHO|WHAT) AM').match(type_.strip()) == None:
                         Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
                     # WHO/WHAT AM I
                     else:
@@ -132,7 +138,7 @@ def parse(filename):
 
                 # This handles the tiebreakers. Since the tiebreaker line has a '-' in it, we just treat this as a special case.
                 except ValueError:
-                    Temp = [ Text[i][:-1] ]
+                    Temp = [ Text[i].strip() ]
                     Temp.append(10)
             
 
@@ -140,8 +146,7 @@ def parse(filename):
         elif question_line.match(Text[i]):
             if Temp[0] != 'WHO/WHAT AM I':
                 dot_idx = Text[i].find('.')
-                Temp.append(Text[i][dot_idx+2:-1])
-
+                Temp.append(Text[i][dot_idx+2:].strip())
                 # multiline questions
                 # we stop reading once we see an answer
                 r = read_multiline(Text, i+1, answer_regex)
@@ -153,7 +158,7 @@ def parse(filename):
 
         # clue line
         elif clue_line.match(Text[i]):
-            Temp.append(Text[i][8:-1])
+            Temp.append(Text[i][8:].strip())
 
             # multiline clues
             # we stop reading once we see another clue or an answer
@@ -163,7 +168,7 @@ def parse(filename):
 
         # answer line
         elif answer_line.match(Text[i]):
-            Temp.append(Text[i][3:-1])
+            Temp.append(Text[i][3:].strip())
             question_count += 1
 
             r = read_multiline(Text, i+1, question_regex + '|' + new_question_regex )
