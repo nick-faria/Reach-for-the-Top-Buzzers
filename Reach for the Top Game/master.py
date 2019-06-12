@@ -124,9 +124,9 @@ def finishQuestion(): #2 wrong answers loop
 
 def openQuestion(question):
 
-    points = question[1]
     topic = question[2]
     nQuestions = question[3]
+    points = question[1]/nQuestions
     #Assign variables to store the information provided
     #by the question's list according to format
     
