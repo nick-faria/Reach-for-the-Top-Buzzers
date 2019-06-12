@@ -4,21 +4,16 @@ QUESTION_TYPES = ["OpenTopic", "Assign", "WhoWhat", "Tiebreak", "Shootout", "Tea
 
 from GUI import *
 
-from pyonLIB import *
+##from pyonLIB import *
+from pyonLib import pyonLIB
 
-##from pyonLib import pyonLIB
-from parse import *
+from Parser import *
 
-global GUI
-global ENDQUESTION
-global FIRSTBUTTON
-global SCORE;
 global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
 filename = "test.txt"
 
-SERCOM=SERCOM(1)
-sercom = pyonLIB.SERCOM(1)
+SERCOM=pyonLIB.SERCOM(1)
 
 GUI = GraphicalUserInterface(600, 450, WHITE)
 
@@ -30,24 +25,31 @@ questionTypes = ["OPEN QUESTION", "TEAM QUESTION", "WHO/WHAT AM I", "ASSIGNED QU
 SCORE = [0, 0, 0, 0, 0, 0, 0, 0];
 
 
-questions = readinput
+##questions = readinput
 
 #######
 
 def receiveFirstButton():
 
-    FIRSTBUTTON = sercom.read() #update the global variable storing the first button that was pressed
-    if FIRSTBUTTON != None: #If there has been a button pressed (this function is run in a loop so 
+    GUI.update_state("ReaderAsking")
+
+    FIRSTBUTTON = SERCOM.read() #update the global variable storing the first button that was pressed
+    if FIRSTBUTTON != None: #If there has been a button pressed (this function is run in a loop so
+        GUI.update_state("PlayerAnswering") #Update the GUI state
         FIRSTBUTTON += 1 #that is not always the case), add 1 to the value passed for easier use later
-    sercom.clear() #clear the serial communication to prevent buffering/buildup
-    GUI.update_state("PlayerAnswering") #Update the GUI state
-    return FIRSTBUTTON #return which button was pressed first
+        return FIRSTBUTTON #return which button was pressed first
+    
+    
 
 def sendEligibleBuzzers(buzzers): #Send to the arduino which buzzers are eligible
 
-    sercom.write(buzzers) #'buzzers' in [1,0,1,0,1,0,1,0] format, 1 = yes, 0 = no
+    SERCOM.write(buzzers) #'buzzers' in [1,0,1,0,1,0,1,0] format, 1 = yes, 0 = no
+    SERCOM.clear() #clear the serial communication to prevent buffering/buildup
 
 def updateScore(button, points):
+    print(button)
+    print(SCORE[button -1])
+    print(points)
     SCORE[button -1] += points
 def sendQ(question):
     GUI.text_fields.get('question_text').update_text(question)
@@ -68,6 +70,7 @@ def sendPoints(points):
 def unansweredLoop(): #unanswered screen loop
     GUI.update_state('ReaderAsking') #Update state
     FIRSTBUTTON = receiveFirstButton()
+    print(FIRSTBUTTON)
     #Check to receive first button pressed from arduino
     ENDQUESTION = False #Var to keep track of loop end
     while FIRSTBUTTON == None and ENDQUESTION == False:
@@ -82,6 +85,7 @@ def unansweredLoop(): #unanswered screen loop
                 GUI.user_mouse_input = None
                 #Reset mouse input
         FIRSTBUTTON = receiveFirstButton()
+        print(FIRSTBUTTON)
         #Check to receive first button for next loop
 
 def receiveAnswerCheck(): #check answer screen loop
@@ -446,14 +450,18 @@ def main():
 ##        for q in questionTypes:
 ##            if question[0] == q:
 ##            questionMethods[q](question)
-
+    
     questions = parse(filename)
+
+    ##SERCOM.write([[1,1,1,1,1,1,1,1]])
+
+    while True:
+        print(SERCOM.read())
 
     for question in questions:
         q = questionTypes.index(question[0])
         questionMethods[q](question)
 
-    sercom.close()
+    SERCOM.close()
 
 main()
-print SCORE
