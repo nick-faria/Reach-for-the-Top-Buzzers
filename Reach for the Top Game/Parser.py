@@ -99,10 +99,7 @@ def parse(filename):
                 question_type = tmp[0]
                 topic = tmp[1]
                 points = int(Text[i][:Text[i].find(char)])                      
-                if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
-                    Temp.append('OPEN QUESTION')
-                else:
-                    Temp.append(question_type)
+                Temp.append(question_type)
 
                 if re.compile('.*ASSIGNED QUESTION').match(question_type) == None:
                     Temp.append(points)
@@ -122,6 +119,9 @@ def parse(filename):
                     # NOT WHO/WHAT AM I
                     if re.compile('.*(WHO|WHAT) AM').match(type_[:-1]) == None:
                         Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
+                        if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
+                            Temp.append('')
+
                     # WHO/WHAT AM I
                     else:
                         Temp[-1] = 'WHO/WHAT AM I'
@@ -189,6 +189,15 @@ def parse(filename):
 
     File.close()
 
-    return Mainlist
+    #    return Mainlist
 
+
+#    for m in Mainlist:
+#        for i in m:
+#            print(i)
+#        print()
+
+
+if __name__ == '__main__':
+    parse('test.txt')
 
