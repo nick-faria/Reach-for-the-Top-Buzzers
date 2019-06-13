@@ -10,6 +10,8 @@
  * receives a "new question" message from the server.
  *
  */
+/* TODO:
+ */
 
 #include <RF24Network.h>
 #include <RF24.h>
@@ -65,8 +67,8 @@ void setup()
 
   network.multicastLevel(this_team);
 
-  pinMode(PIN_LIGHT   , OUTPUT);
-  pinMode(PIN_BUTTON  , INPUT_PULLUP);
+  pinMode(PIN_LIGHT , OUTPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
 
   debug("Initialized");
 }
@@ -112,20 +114,9 @@ void loop()
         byte *msg = btn_event.to_message(&msg_size);
     
         network.write(header, msg, msg_size);
-        delayMicroseconds(300);
         delete[] msg;
-        debug("button pressed");
-
-        registers[REG_LIGHT] = 0x01;
-        registers[REG_SOUND] = 0x10;
+        debug("button event");
       }
-    }
-    /* button was released */
-    else
-    {
-      button_is_held = false;
-      registers[REG_LIGHT] = 0x00;
-      registers[REG_SOUND] = 0x00;
     }
   }
   button_previous = button_state;
@@ -144,11 +135,17 @@ void loop()
       this_team = previous_team;
       network.begin(this_node);
       network.multicastLevel(this_team);
+
+      /* we're connected on our old address, so LED is on */
+      registers[REG_LIGHT] = 0xFF;
     }
     else
     {
       button_is_held = false;
       can_be_pressed = true;
+
+      /* we're connected, so LED is on */
+      registers[REG_LIGHT] = 0xFF;
     }
   }
 
@@ -233,6 +230,10 @@ bool pair(void)
   /* Node 01 is reserved for pairing */
   network.begin(01);
 
+  /* turn off the status LED; we're disconnected */
+  registers[REG_LIGHT] = 0x00;
+  digitalWrite(PIN_LIGHT, LOW);
+
   /* make sure there is a server to pair with */
   if (ping())
   {
@@ -281,7 +282,8 @@ bool pair(void)
       /* ensure we can connect to the server with our new address */
       if (ping())
       {
-        /* send a disconnect message to the current parent, to free our old name */
+        /* send a disconnect message to the
+         * server, to free our old name */
         RF24NetworkHeader discon_header(parent, ID_DISCONNECT);
         byte discon_msg[32];
         memcpy (discon_msg, &old_name, sizeof(old_name));
@@ -289,6 +291,10 @@ bool pair(void)
 
         this_node = address;
         this_team = team;
+
+        /* turn on the status LED; we're connected */
+        registers[REG_LIGHT] = 0xFF;
+
         return true;
       }
       else
