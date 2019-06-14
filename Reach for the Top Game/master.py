@@ -34,10 +34,12 @@ def receiveFirstButton():
     GUI.update_state("ReaderAsking")
 
     FIRSTBUTTON = SERCOM.read() #update the global variable storing the first button that was pressed
-    if FIRSTBUTTON != None: #If there has been a button pressed (this function is run in a loop so
+    if FIRSTBUTTON: #If there has been a button pressed (this function is run in a loop so
         GUI.update_state("PlayerAnswering") #Update the GUI state
         FIRSTBUTTON += 1 #that is not always the case), add 1 to the value passed for easier use later
         return FIRSTBUTTON #return which button was pressed first
+    else:
+        print("nothing")
     
     
 
@@ -60,7 +62,7 @@ def sendScore():
 def sendTopic(topic, questionType):
     GUI.text_fields.get('question_type_and_topic').update_text(questionType + ": " + topic)
 def sendPoints(points):
-    GUI.text_fields.get('points').update_text("Points: " + str(points))
+    GUI.text_fields.get('points').update_text("Points: " + str(round(points)))
 
     # this is borked, GUI.text_fields.get('points') is returning None
     #GUI.text_fields.get('points').update_text("Points: " + str(points))
@@ -70,22 +72,19 @@ def sendPoints(points):
 def unansweredLoop(): #unanswered screen loop
     GUI.update_state('ReaderAsking') #Update state
     FIRSTBUTTON = receiveFirstButton()
-    print(FIRSTBUTTON)
     #Check to receive first button pressed from arduino
     ENDQUESTION = False #Var to keep track of loop end
-    while FIRSTBUTTON == None and ENDQUESTION == False:
+    while not FIRSTBUTTON and ENDQUESTION == False:
         #While no button has been pressed
         GUI.check_events() #Check for click
-        if GUI.user_mouse_input: #If click,
-            if GUI.user_mouse_input == "ShowAnswer":
-                #On button
-                ENDQUESTION = True #End loop
-                GUI.update_state("NoPointsShowAnswer")
-                #Update state
-                GUI.user_mouse_input = None
-                #Reset mouse input
+        if GUI.user_mouse_input == "ShowAnswer":
+            #On button
+            ENDQUESTION = True #End loop
+            GUI.update_state("NoPointsShowAnswer")
+            #Update state
+            GUI.user_mouse_input = None
+            #Reset mouse input
         FIRSTBUTTON = receiveFirstButton()
-        print(FIRSTBUTTON)
         #Check to receive first button for next loop
 
 def receiveAnswerCheck(): #check answer screen loop
@@ -151,7 +150,7 @@ def openQuestion(question):
         unansweredLoop() #Run the loop for when the question hasn't been answered yet
         #This exits itself when a button is pressed and keeps track of which button was pressed first
         #If question is over, ie nobody guesses answer, changes ENDQUESTION variable to true
-        while answerCount < 2 and ENDQUESTION == False:
+        while answerCount < 2 and not ENDQUESTION:
             #While there are still attempts to answer remaining and the question isn't over
             answer = receiveAnswerCheck()
             #Runs the loop to update GUI state to give reader option to say whether the answer is
@@ -173,6 +172,7 @@ def openQuestion(question):
             if answerCount >= 2 and answer == False:
                 #If answer attempt count is max at 2 (1 each team)
                 finishQuestion() #Update GUI state to show the answer, then proceed to next question
+        print("End of while loop")
 
 def teamQuestion(question):
 
@@ -454,13 +454,19 @@ def main():
     questions = parse(filename)
 
     ##SERCOM.write([[1,1,1,1,1,1,1,1]])
-
-    while True and False:
-        print(SERCOM.read())
+##
+##    for _ in questions:
+##        print(*_, sep='\n', end='\n\n')
+##        print()
 
     for question in questions:
         q = questionTypes.index(question[0])
         questionMethods[q](question)
+
+##    while 1:
+##        print(SERCOM.read())
+##        SERCOM.write([[1,1,1,1,1,1,1,1]])
+##        SERCOM.clear()
 
     SERCOM.close()
 
