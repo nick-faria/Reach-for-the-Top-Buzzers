@@ -11,11 +11,8 @@
  *
  */
 /* TODO:
- *  - Send messages to buttons to tell them that they're disabled
- *    * Get rid of the button disbled checking in BUTTON_EVENT
- *      (Or maybe leave it in for redundancy?)
- *  - Send a CANT_PAIR message back to the button so it doesn't
- *    have to time out waiting to pair
+ *  - Get rid of the button disbled checking in BUTTON_EVENT
+ *    (Or maybe leave it in for redundancy?)
  */
 
 #include <SPI.h>
@@ -34,7 +31,7 @@
 
 
 /* ==[ VARIABLES ]== */
-/* pins */
+/* Pins */
 enum
 {
   PIN_CE  = 7,
@@ -59,7 +56,7 @@ bool in_pairing_mode = false;
 unsigned long pairing_mode_start_time = 0;
 int pairing_team = 0;
 
-uint8_t button_mask = 0x00;
+uint8_t button_mask = 0xFF;
 
 int pressed_button = -1;
 
@@ -113,6 +110,14 @@ void loop()
     network.multicast(header, msg, msg_size, 0);
     network.multicast(header, msg, msg_size, 1);
     delete[] msg;
+
+    /* send disable messages to the correct team */
+    int team_to_disable = (button_mask & 0x0F == 0x0F)? 0 : 1;
+    debug("button_mask = 0x%X, team_to_disable = %d", button_mask, team_to_disable);
+    msg_size = 0;
+    msg = NULL;
+    header = RF24NetworkHeader(00, ID_DISCONNECT);
+    network.multicast(header, msg, msg_size, team_to_disable);
   }
 
   /* Read each pairing button */
@@ -248,6 +253,29 @@ buttonevent_done_searching_for_child:
       if (pressed_button == -1)
       {
         pressed_button = button_number;
+
+        /* Turn on the button's buzzer... */
+        Instruction inst(OP_WRITE_REGISTER);
+        inst.data[0] = REG_SOUND;
+        inst.data[1] = 0xFF;
+        int msg_size = 0;
+        byte *msg = inst.to_message(&msg_size);
+
+        RF24NetworkHeader header(children[team][player], ID_INSTRUCTION);
+        network.write(header, msg, msg_size);
+        delay(10);
+
+        /* ...For a certain amount of time */
+        inst = Instruction(OP_WRITE_REGISTER);
+        inst.data[0] = REG_SOUND_TIMER;
+        inst.data[1] = 10;
+
+        msg_size = 0;
+        msg = inst.to_message(&msg_size);
+    
+        header = RF24NetworkHeader(children[team][player], ID_INSTRUCTION);
+        network.write(header, msg, msg_size);
+        delete[] msg;
       }
     }
 
@@ -291,11 +319,17 @@ buttonevent_done_searching_for_child:
       }
       else
       {
+        /* Send a disconnect message back to the button to say we can't pair */
+        RF24NetworkHeader response_header(header.from_node, ID_DISCONNECT);
+        network.write(response_header, NULL, 0);
         error("Can't pair -- team %d is full!", pairing_team + 1);
       }
     }
     else
     {
+      /* Send a disconnect message back to the button to say we can't pair */
+      RF24NetworkHeader response_header(header.from_node, ID_DISCONNECT);
+      network.write(response_header, NULL, 0);
       error("Can't pair -- not in pairing mode!");
     }
    }break;

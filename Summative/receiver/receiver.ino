@@ -21,7 +21,7 @@
 
 
 /* ==[ VARIABLES ]== */
-/* pins */
+/* Pins */
 enum
 {
   PIN_CE     = 7,
@@ -77,10 +77,10 @@ void loop()
 {
   network.update();
 
-  /* receive messages */
+  /* Receive messages */
   while (network.available())
   {
-    /* read the message from the network */
+    /* Read the message from the network */
     RF24NetworkHeader header;
     char message[32];
     debug("Reading...");
@@ -90,26 +90,25 @@ void loop()
     interpret_message(header, message);
   }
 
-  /* handle the button -- when pressed, it sends an event to the server.
-     If it is held for long enough, the unit will enter pairing mode */
+  /* hHIf it is held for long enough, the unit will enter pairing mode */
   int button_state = digitalRead(PIN_BUTTON);
   if (button_state != button_previous)
   {
     debug("button pushed");
 
-    /* the button was pressed */
+    /* The button was pressed */
     if (button_state == LOW)
     {
       button_pressed_time = millis();
       button_is_held = true;
 
-      /* send a button press event to the server */
+      /* Send a button press event to the server */
       if (can_be_pressed)
       {
         can_be_pressed = false;
         RF24NetworkHeader header(parent, ID_BUTTON_EVENT);
     
-        ButtonEvent btn_event(this_team, this_player);
+        ButtonEvent btn_event(this_team, this_node);
         int msg_size = 0;
         byte *msg = btn_event.to_message(&msg_size);
     
@@ -118,16 +117,21 @@ void loop()
         debug("button event");
       }
     }
+    else
+    {
+      button_is_held = false;
+    }
   }
   button_previous = button_state;
 
-  /* after the button has been held for a certain amount of time, attempt to pair */
+  /* After the button has been held for a certain amount of time, attempt to pair */
   if (button_is_held && millis() - button_pressed_time >= PAIRING_MODE_START_DELAY)
   {
-    /* hold our previous address, so we can reuse
+    /* Hold our previous address, so we can reuse
      * our old address if we fail to pair */
     uint16_t previous_address = this_node;
     uint8_t  previous_team    = this_team;
+    uint8_t  previous_led     = registers[REG_LIGHT];
     if (!pair())
     {
       debug("Failed to pair!");
@@ -136,29 +140,40 @@ void loop()
       network.begin(this_node);
       network.multicastLevel(this_team);
 
-      /* we're connected on our old address, so LED is on */
-      registers[REG_LIGHT] = 0xFF;
+      registers[REG_LIGHT] = previous_led;
     }
     else
     {
       button_is_held = false;
       can_be_pressed = true;
 
-      /* we're connected, so LED is on */
+      /* We're connected, so LED is on */
       registers[REG_LIGHT] = 0xFF;
     }
   }
 
-  /* update the registers */
-  digitalWrite(PIN_LIGHT, registers[REG_LIGHT]);
-  if (registers[REG_SOUND] == 0x00)
+  /* Update the registers */
+  analogWrite(PIN_LIGHT, registers[REG_LIGHT]);
+
+  /* The buzzer is only on while SOUND_TIMER is greater than 0 */
+  if (registers[REG_SOUND_TIMER] > 0x00)
   {
-    noTone(PIN_SOUND);
+    if (registers[REG_SOUND] == 0x00)
+    {
+      noTone(PIN_SOUND);
+    }
+    else
+    {
+      int pitch = map(registers[REG_SOUND], 0, 255, 512, 1024);
+      tone(PIN_SOUND, pitch);
+    }
+
+    registers[REG_SOUND_TIMER]--;
   }
+  /* Once the SOUND_TIMER runs out, turn off the buzzer */
   else
   {
-    int pitch = map(registers[REG_SOUND], 0, 255, 512, 1024);
-    tone(PIN_SOUND, pitch);
+    noTone(PIN_SOUND);
   }
 
   delay(50);
@@ -171,25 +186,26 @@ void interpret_message(RF24NetworkHeader header, byte *message)
 {
   switch(header.type)
   {
-  /* instruction */
+  /* Instruction */
   case ID_INSTRUCTION:
    {
     byte opcode = message[1];
     switch (opcode)
     {
-    /* mark a new question */
+    /* Mark a new question */
     case OP_NEW_QUESTION:
      {
       debug("New Question");
       can_be_pressed = true;
+      registers[REG_LIGHT] = 0xFF;
      }break;
 
-    /* write to a register */
+    /* Write to a register */
     case OP_WRITE_REGISTER:
      {byte reg   = message[2],
            value = message[3];
 
-      debug("write 0x%h to register 0x%h", value, reg);
+      debug("write 0x%X to register 0x%X", value, reg);
 
       registers[reg] = value;
      }break;
@@ -199,6 +215,13 @@ void interpret_message(RF24NetworkHeader header, byte *message)
       break;
     }
    }break;
+
+  /* Disconnect message -- button is disabled for this question */
+  case ID_DISCONNECT:
+    can_be_pressed = false;
+    registers[REG_LIGHT] = 0x80;
+    debug("button is disabled");
+    break;
 
   default:
     error("unknown message ID 0x%.2hhX", header.type);
@@ -224,27 +247,27 @@ bool pair(void)
    *  goto begin.
    */
 
-  /* store our old name */
+  /* Store our old name */
   uint16_t old_name = this_node;
 
   /* Node 01 is reserved for pairing */
   network.begin(01);
 
-  /* turn off the status LED; we're disconnected */
+  /* Turn off the status LED; we're disconnected */
   registers[REG_LIGHT] = 0x00;
   digitalWrite(PIN_LIGHT, LOW);
 
-  /* make sure there is a server to pair with */
+  /* Make sure there is a server to pair with */
   if (ping())
   {
     debug("requesting new address!");
 
-    /* request to pair with the server */
+    /* Request to pair with the server */
     RF24NetworkHeader pair_header(parent, ID_PAIR);
     char pair_msg[32] = "";
     network.write(pair_header, pair_msg, sizeof(pair_msg));
 
-    /* wait for the pairing message from the server */
+    /* Wait for the pairing message from the server */
     bool got_pair_response = true;
     unsigned long const PAIRING_TIMEOUT = 1000;
     unsigned long pairing_begin = millis();
@@ -260,9 +283,12 @@ bool pair(void)
       network.update();
     }
 
-    if (got_pair_response)
+    RF24NetworkHeader tmp_recv_header;
+    network.peek(tmp_recv_header);
+
+    if (got_pair_response && tmp_recv_header.type == ID_PAIR)
     {
-      /* receive our new address */
+      /* Receive our new address */
       uint16_t address = 0;
       uint8_t  team    = 0;
       byte addr_data[sizeof(address) + sizeof(team)] = { 0 };
@@ -275,14 +301,14 @@ bool pair(void)
 
       debug("new address is %d on team %d", address, team);
 
-      /* set our new address */
+      /* Set our new address */
       network.begin(address);
       network.multicastLevel(team);
   
-      /* ensure we can connect to the server with our new address */
+      /* Ensure we can connect to the server with our new address */
       if (ping())
       {
-        /* send a disconnect message to the
+        /* Send a disconnect message to the
          * server, to free our old name */
         RF24NetworkHeader discon_header(parent, ID_DISCONNECT);
         byte discon_msg[32];
@@ -292,7 +318,7 @@ bool pair(void)
         this_node = address;
         this_team = team;
 
-        /* turn on the status LED; we're connected */
+        /* Turn on the status LED; we're connected */
         registers[REG_LIGHT] = 0xFF;
 
         return true;
@@ -302,12 +328,18 @@ bool pair(void)
         debug("Didn't receive pong after setting new address");
       }
     }
+    else if (tmp_recv_header.type == ID_DISCONNECT)
+    {
+      debug("Connection refused");
+      byte msg[32] = { 0 };
+      network.read(tmp_recv_header, &msg, sizeof(msg));
+    }
     else
     {
-      debug("Didn't receive new address");
+      debug("New address message timed out");
     }
   }
-  /* we were not acknowledged */
+  /* We were not acknowledged */
   else
   {
     debug("Server pong timed out!");
@@ -321,7 +353,7 @@ bool ping(void)
 {
   unsigned long const PING_TIMEOUT = 1000;
 
-  /* try to ping the server */
+  /* Try to ping the server */
   RF24NetworkHeader ping_header(parent, ID_PING);
   char ping[32] = "ping";
   network.write(ping_header, ping, sizeof(ping));
@@ -330,7 +362,7 @@ bool ping(void)
   unsigned long start = millis();
 
 
-  /* wait for the pong from the server */
+  /* Wait for the pong from the server */
   network.update();
   while (!network.available())
   {
@@ -342,7 +374,7 @@ bool ping(void)
     }
   }
 
-  /* receive the pong from the server */
+  /* Receive the pong from the server */
   RF24NetworkHeader pong_header;
   char pong[32];
   network.read(pong_header, &pong, sizeof(pong));
