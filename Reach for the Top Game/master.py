@@ -9,16 +9,21 @@ from pyonLib import pyonLIB
 
 from Parser import *
 
-global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
+global GUI
+global ENDQUESTION
+global FIRSTBUTTON
+global SCORE
+
+
+ENDQUESTION = False
+FIRSTBUTTON = None
+
 
 filename = "test.txt"
 
 SERCOM=pyonLIB.SERCOM(1)
 
 GUI = GraphicalUserInterface(600, 450, WHITE)
-
-ENDQUESTION = False
-FIRSTBUTTON = None
 
 questionTypes = ["OPEN QUESTION", "TEAM QUESTION", "WHO/WHAT AM I", "ASSIGNED QUESTION", "SHOOTOUT",  "TIE-BREAKERS IF NECESSARY", "WORD SCRAMBLE"] #Question types Sunny
 
@@ -30,6 +35,7 @@ SCORE = [0, 0, 0, 0, 0, 0, 0, 0];
 #######
 
 def receiveFirstButton():
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
     GUI.update_state("ReaderAsking")
 
@@ -39,29 +45,33 @@ def receiveFirstButton():
         FIRSTBUTTON += 1 #that is not always the case), add 1 to the value passed for easier use later
         return FIRSTBUTTON #return which button was pressed first
     else:
-        print("nothing")
+        pass##print("nothing")
     
     
 
 def sendEligibleBuzzers(buzzers): #Send to the arduino which buzzers are eligible
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
     SERCOM.write(buzzers) #'buzzers' in [1,0,1,0,1,0,1,0] format, 1 = yes, 0 = no
     SERCOM.clear() #clear the serial communication to prevent buffering/buildup
 
 def updateScore(button, points):
-    print(button)
-    print(SCORE[button -1])
-    print(points)
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     SCORE[button -1] += points
 def sendQ(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.text_fields.get('question_text').update_text(question)
 def sendA(answer):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.text_fields.get('answer_text').update_text(answer)
 def sendScore():
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.text_fields.get('basic_scores').update_text(repr(SCORE))
 def sendTopic(topic, questionType):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.text_fields.get('question_type_and_topic').update_text(questionType + ": " + topic)
 def sendPoints(points):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.text_fields.get('points').update_text("Points: " + str(round(points)))
 
     # this is borked, GUI.text_fields.get('points') is returning None
@@ -70,10 +80,10 @@ def sendPoints(points):
 
 
 def unansweredLoop(): #unanswered screen loop
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.update_state('ReaderAsking') #Update state
     FIRSTBUTTON = receiveFirstButton()
     #Check to receive first button pressed from arduino
-    ENDQUESTION = False #Var to keep track of loop end
     while not FIRSTBUTTON and ENDQUESTION == False:
         #While no button has been pressed
         GUI.check_events() #Check for click
@@ -83,11 +93,13 @@ def unansweredLoop(): #unanswered screen loop
             GUI.update_state("NoPointsShowAnswer")
             #Update state
             GUI.user_mouse_input = None
+            GUI.render()
             #Reset mouse input
         FIRSTBUTTON = receiveFirstButton()
         #Check to receive first button for next loop
 
 def receiveAnswerCheck(): #check answer screen loop
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     ENDQUESTION = False #Var to keep track of loop end
     while ENDQUESTION == False: #While no click
         GUI.check_events() #Check for click
@@ -106,6 +118,7 @@ def receiveAnswerCheck(): #check answer screen loop
                 ENDQUESTION = True #end loop
                 
 def finishQuestion(): #2 wrong answers loop
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     GUI.update_state("NoPointsShowAnswer")
     #Update state to screen that shows answer
     ENDQUESTION = False #Var to keep track of loop end
@@ -113,7 +126,7 @@ def finishQuestion(): #2 wrong answers loop
         #While stay on the show answer screen
         GUI.check_events() #Check for click
         if GUI.user_mouse_input: #If click
-            if gui.user_mouse_input == 'NextQuestion':
+            if GUI.user_mouse_input == 'NextQuestion':
                 #On next question button
                 ENDQUESTION = True #end loop
                 GUI.update_state('ReaderAsking')
@@ -122,6 +135,9 @@ def finishQuestion(): #2 wrong answers loop
                 #Reset mouse input
 
 def openQuestion(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
+
+    print(question)
 
     topic = question[2]
     nQuestions = question[3]
@@ -150,7 +166,7 @@ def openQuestion(question):
         unansweredLoop() #Run the loop for when the question hasn't been answered yet
         #This exits itself when a button is pressed and keeps track of which button was pressed first
         #If question is over, ie nobody guesses answer, changes ENDQUESTION variable to true
-        while answerCount < 2 and not ENDQUESTION:
+        while answerCount < 2 and ENDQUESTION==False:
             #While there are still attempts to answer remaining and the question isn't over
             answer = receiveAnswerCheck()
             #Runs the loop to update GUI state to give reader option to say whether the answer is
@@ -169,12 +185,14 @@ def openQuestion(question):
                     sendEligibleBuzzers([[0,0,0,0,1,1,1,1]])
                     unansweredLoop()
                 answerCount +=1; #Add one answer attempt to the count
-            if answerCount >= 2 and answer == False:
+            if answerCount >= 2 and answer == False :
                 #If answer attempt count is max at 2 (1 each team)
                 finishQuestion() #Update GUI state to show the answer, then proceed to next question
-        print("End of while loop")
+        if ENDQUESTION:
+            finishQuestion() #Update GUI state to show the answer, then proceed to next question
 
 def teamQuestion(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
     topic = question[1]
     GUI.start_new_question("Team")
@@ -219,7 +237,6 @@ def teamQuestion(question):
             sendQ(question[4 + q])
             sendA(question[5 + q])
             sendPoints(10)
-            sendTopic(topic)
             sendTopic(topic, "Team Question")
             answerCount = 0
             ENDQUESTION = False
@@ -262,6 +279,8 @@ def teamQuestion(question):
                 finishQuestion()
     
 def whoAmIQuestion(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
+    
     whowhat = question[1]
     answer = question[6]
     answered = False
@@ -296,6 +315,7 @@ def whoAmIQuestion(question):
                 finishQuestion()
 
 def assignedQuestion(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
 
     topic = question[1]
 
@@ -335,6 +355,8 @@ def assignedQuestion(question):
 
                     
 def shootoutQuestion(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
+    
     totalEligibleBuzzers = [1,1,1,1,1,1,1,1]
     answeredBuzzers = [0,0,0,0,0,0,0,0]
     nQuestions = question[1]
@@ -401,6 +423,8 @@ def shootoutQuestion(question):
 
                 
 def tiebreaker(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
+    
     points = question[1]
     topic = question[2]
 
@@ -437,6 +461,7 @@ def tiebreaker(question):
 
 
 def wordscramble(question):
+    global GUI, ENDQUESTION, FIRSTBUTTON, SCORE
     pass
 
 

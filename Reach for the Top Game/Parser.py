@@ -80,9 +80,15 @@ def parse(filename):
 
     #A '-' follows the point number in the PDF, so the characters following a '-' describe the type of the question (eg. OPEN QUESTION, etc.)                            
         if new_question_line.match(Text[i]):
-            if len(Temp) > 0 and 'OPEN' in Temp[0]:
+            if len(Temp) > 0 and ('OPEN' in Temp[0] or 'SPECIAL' in Temp[0]):
                 Temp.insert(3, question_count)
-            Mainlist.append(Temp)
+
+            new_temp = []
+            for thing in Temp:
+                new_temp.append(thing.strip().rstrip() if isinstance(thing, str) else thing)
+            if len(Temp) != 0 and re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(new_temp[0]) != None:
+                new_temp[0] = 'OPEN QUESTION'
+            Mainlist.append(new_temp)
             Temp=[]
             question_count = 0
             Count += 1
@@ -103,6 +109,8 @@ def parse(filename):
 
                 if re.compile('.*ASSIGNED QUESTION').match(question_type) == None:
                     Temp.append(points)
+                else:
+                    Temp.append(10)
                 Temp.append(topic)
            
                 
@@ -119,8 +127,9 @@ def parse(filename):
                     # NOT WHO/WHAT AM I
                     if re.compile('.*(WHO|WHAT) AM').match(type_[:-1]) == None:
                         Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
-                        if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
-                            Temp.append('')
+
+                    if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
+                        Temp.append('')
 
                     # WHO/WHAT AM I
                     else:
@@ -189,7 +198,7 @@ def parse(filename):
 
     File.close()
 
-    #    return Mainlist
+    return Mainlist
 
 
 #    for m in Mainlist:
@@ -200,4 +209,3 @@ def parse(filename):
 
 if __name__ == '__main__':
     parse('test.txt')
-
