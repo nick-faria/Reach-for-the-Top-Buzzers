@@ -1,0 +1,77 @@
+
+
+
+    REACH FOR THE TOP USER MANUAL
+    =============================
+
+
+    By: Trevor Last
+
+
+---
+
+    INTRODUCTION
+
+
+  Reach-for-the-Top is a system for playing Reach for the Top. This system is made up of two parts: the physical hardware, consisting of the buttons and server; and the software used to orchestrate the game itself and to display the game on the screen. This documentation is likewise split into two parts: the first section documents how to get set up to play a game, and the second section contains technical information, which can be used as a reference if, for example, it is ever necessary to replace a part of the system.
+
+
+---
+---
+
+
+    SECTION 1: PLAYING A GAME OF REACH FOR THE TOP
+
+
+  This section of the manual describes how to set up a game of Reach for the Top. First, you must have two things: the software, and the hardware. The hardware consists of 8 buttons, 4 blue, 4 red. The software consists of several Python source code files. Once you have these things, you must supply a Reach for the Top question pack. These packs are often found in PDF format. However, for the software to use the pack, it must be given a file in TXT format. The easiest way to convert between the two is to copy-paste the PDF into a TXT file. This can be accomplished on Windows by opening the PDF in your browser, and typing 'CTRL-A' and then 'CTRL-C'. Afterwards, open the Notepad program and type 'CTRL-V', to paste the text of the PDF into Notepad. Now, save the file with the '.txt' file extension to complete the process.
+
+  Next, the hardware components must be set up. This process consists of plugging the server into the computer you will be running the software on. After this is done, the buttons must be paired to the server. This can be accomplished by holding either the 'Team A' or 'Team B' button on the server, depending on which team you wish to add the button to. While the server's button is held, press and hold the big button on top of the button unit for 1 second. If the pairing succeeded, the light on top of the button should turn on. If the pairing failed (ie. the light did NOT turn on) repeat the pairing process until it does succeed. Repeat this process for each button unit, until all 8 are paired to the server. Note that each team can only have 4 buttons assigned to it, and attempting to pair more than 4 buttons to a given team will result in the button failing to pair.
+
+  Once all the button units are paired to the server, the game is ready to begin. Get everything set up, (eg. each team sitting at a different table, computer screen cast to a projector/larger screen, etc.) then simply run the software program. A window will come up containing the question and a button which can be clicked to reveal the correct answer. After the correct answer has been revealed, the button can be clicked again to move on to the next question. This process is repeated until all the questions have been asked, at which point the game ends.
+
+---
+---
+
+    SECTION 2: TECHNICAL REFERENCE
+
+  This section of the manual contains technical information about both the hardware and the software. This section might be of use to somebody that needs to fix a broken button unit, or perhaps replace a broken server.
+
+---
+
+    2.1  THE SERVER
+
+
+  The server unit is controlled by the `sender.ino' program. The two buttons attached to the server unit are on Arduino pins 5 and 4 for Team A and Team B, respectively. The RF24 radio is attached as usual, and its CE and CSN pins connected to Arduino pins 7 and 8, respectively. The Arduino used for this purpose MUST support SPI.
+
+---
+
+    2.2  THE BUTTONS
+
+
+  The button units are controlled by the `receiver.ino' program. The button is attached to Arduino pin 8. The LED is attached to Arduino pin 9, and the buzzer to pin 5. The RF24 radio is attached as usual, and its CE and CSN pins connected to Arduino pins 7 and 6, respectively. The Arduino used for this purpose MUST support SPI.
+
+  Todo -- Manufacturing a button (Zack)
+
+---
+
+    2.3  THE MASTER PROGRAM
+
+
+  Todo (Nick)
+
+---
+
+    2.4  THE GUI
+
+
+  Todo (Zane)
+
+---
+
+    2.5  THE PARSER
+
+
+    Todo (Sunny)
+
+---
+
