@@ -1,48 +1,54 @@
+#
+# Parser for Reach for the Top question packs
+#
+
+
 
 def parse(filename):
+    """ Parse the Reach for the Top question pack from the file called `filename`. """
     import re
 
-    #Returns True if 'text' is a PDF page footer
-    def is_footer(text):
-        footer = re.compile('.*REACH.*FOR.*THE.*TOP|.*SCHOOLREACH.*PACK.*|Page.*[0-9]+.*of.*[0-9]+')
-        if footer.match(text) == None:
-            return False
-        else:
-            return True
+    def isnumeric(char):
+        """
+        Quick-and-dirty implementation of str.isnumeric() method.
 
-    def ignore(text):
-        ignore_ = re.compile('.*PART.*|.*FOR.*EACH.*CORRECT.*ANSWER|.*MINUTE.*BREAK.*TO.*ROUND|END.*OF.*GAME|\n')
-        if ignore_.match(text) == None:
-            return False
-        else:
-            return True
+        Used for backwards-compatibility with Python 2.
+        """
+        return char in '0123456789'
 
-    # first_int: returns the next number in the text
-    def first_int(Text):
-        for char in Text:
-            if char.isnumeric():
-                return char
-        return 0
-
-    # next_character returns the next non-numeric, non-space character in 'ine'                 
-    def next_character(line):
-        for char in line:
-            if not char.isspace() and not char.isnumeric():
-                return char
-
-    def is_question_or_answer_or_clue(text):
-        reg = re.compile(new_question_regex + '|' + question_regex + '|' + answer_regex + '|' + clue_regex)
-        if reg.match(text) == None:
-            return False
-        else:
-            return True
-
-    #
     def read_multiline(Text, i, filter_):
-        out = ''
+        """ Read lines sequentially until `filter_` matches. """
 
+        def is_question_or_answer_or_clue(text):
+            """ Returns true if `text` matches the question, answer, or clue regexes. """
+            reg = re.compile(new_question_regex + '|' + question_regex + '|' + answer_regex + '|' + clue_regex)
+            if reg.match(text) == None:
+                return False
+            else:
+                return True
+
+        def is_footer(text):
+            """ Returns True if 'text' is a PDF page footer. """
+            footer = re.compile('.*REACH.*FOR.*THE.*TOP|.*SCHOOLREACH.*PACK.*|Page.*[0-9]+.*of.*[0-9]+')
+            if footer.match(text) == None:
+                return False
+            else:
+                return True
+
+        def ignore(text):
+            """ Used by `read_multiline`; returns true if `text` is just noise. """
+            ignore_ = re.compile('.*PART.*|.*FOR.*EACH.*CORRECT.*ANSWER|.*MINUTE.*BREAK.*TO.*ROUND|END.*OF.*GAME|\n')
+            if ignore_.match(text) == None:
+                return False
+            else:
+                return True
+
+        out = ''
         end_multiline = re.compile(filter_)
-        while i < len(Text) and end_multiline.match(Text[i]) == None and not is_question_or_answer_or_clue(Text[i]):
+        while (i < len(Text)
+            and end_multiline.match(Text[i]) == None
+            and not is_question_or_answer_or_clue(Text[i])):
+
             if not is_footer(Text[i]) and not ignore(Text[i]):
                 out += ' ' + Text[i][:-1]
             i += 1
@@ -51,9 +57,24 @@ def parse(filename):
 
 
 
-    #Opens file 
+    # Open the file to parse
     File = open(filename, 'r')
 
+    # Read the file
+    tmp_text = File.readlines()
+    Text = []
+
+    # Replace cp1252 characters with similar ASCII characters
+    for line in tmp_text:
+        line = line.replace('\x91', "`")
+        line = line.replace('\x92', "'")
+        line = line.replace('\x93', "``")
+        line = line.replace('\x94', "''")
+        line = line.replace('\x95', "")
+        line = line.replace('\r'  , "")
+        Text.append(line)
+
+    # Create the regexes
     new_question_regex = '.*[0-9]+\-POINT|.*TIE-BREAKERS IF NECESSARY'
     question_regex = '.*[0-9]+\. '
     answer_regex = '.*A\. '
@@ -67,145 +88,194 @@ def parse(filename):
     scramble_question = re.compile('(.[\.\,] .)+')
     scramble_answer = re.compile('\(any one of\) (.* or .*)*')
 
-    Count = -1
-    questions = []
-    Text = File.readlines()
-    Temp=[]
-    Mainlist=[]
-    Mainlist2=[]
+
+    # Parser state variables
+    Temp = []
+    Mainlist = []
     question_count = 0
+    Count = -1
 
+    # Parsing loop
     for i in range(len(Text)):
-        char = next_character(Text[i])
 
-    #A '-' follows the point number in the PDF, so the characters following a '-' describe the type of the question (eg. OPEN QUESTION, etc.)                            
+        # Start of a new question
         if new_question_line.match(Text[i]):
-            if len(Temp) > 0 and ('OPEN' in Temp[0] or 'SPECIAL' in Temp[0]):
+            # SNAPSTART, SNAPOUT, SPECIAL, CHAIN SNAPPERS are treated the same as OPEN questions
+            # TODO: Are there other question types that need this?
+            if len(Temp) > 0 and re.compile('.*OPEN|.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(Temp[0]) is not None:
+                # OPEN questions need a question count
                 Temp.insert(3, question_count)
+                Temp[0] = 'OPEN QUESTION'
 
+            # Remove leading/trailing spaces
             new_temp = []
             for thing in Temp:
                 new_temp.append(thing.strip().rstrip() if isinstance(thing, str) else thing)
-            if len(Temp) != 0 and re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(new_temp[0]) != None:
-                new_temp[0] = 'OPEN QUESTION'
+
+            # Add the previously parsed question to the question list
             Mainlist.append(new_temp)
+
+            # Reset/update the parser variables
             Temp=[]
             question_count = 0
             Count += 1
-            char_index = Text[i].index(char)
-            type_ = Text[i][char_index+1+6:]
-          
-        
 
-            #This handles question types that have topics, such as Open Questions.
+            # type_ ==> [ OPEN | TEAM | <whatever> ] QUESTION (- <topic>)?
+            char_index = Text[i].index('-')
+            type_ = Text[i][char_index+1+6:]
+
+            # This handles question types that have topics, such as OPEN questions.
             try:
+                # tmp ==> [ <question type>, <topic> ]
                 tmp = type_.split('-')
-                tmp[1] = tmp[1][:-1]
 
                 question_type = tmp[0]
                 topic = tmp[1]
-                points = int(Text[i][:Text[i].find(char)])                      
+
+                # Lines are formatted as  `XX-POINT <question type> QUESTION - <topic>',
+                # so slicing up to the index of the first '-' will give us XX, aka the
+                # number of points this question is worth
+                points = int(Text[i][:Text[i].find('-')])                      
+
+                # Start building the parsed list
                 Temp.append(question_type)
 
+                # ASSIGNED questions don't need a points argument
                 if re.compile('.*ASSIGNED QUESTION').match(question_type) == None:
                     Temp.append(points)
                 else:
                     Temp.append(10)
+
                 Temp.append(topic)
            
                 
-            #This handles question types that do not have topics, such as Who Am I.
+            # This handles question types that do not have topics, such as WHO/WHAT AM I.
+            #
+            # Since these question types don't have topics, `tmp` will only have a length
+            # of 1, meaning `tmp[1]` is out of range, raising an IndexError that we catch
+            # here
             except IndexError:
                 try:
-                    # QUESTION TYPE
-                    question_type = type_[:-1]
-                    if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
-                        Temp.append('OPEN QUESTION')
-                    else:
-                        Temp.append(question_type)
+                    # Get the question type
+                    question_type = type_
+                    Temp.append(question_type)
 
-                    # NOT WHO/WHAT AM I
+                    # WHO/WHAT AM I questions don't need a points field
                     if re.compile('.*(WHO|WHAT) AM').match(type_[:-1]) == None:
-                        Temp.append(int(Text[i][:Text[i].find(char)]))  # POINTS
+                        # Lines are formatted as  `XX-POINT <question type> QUESTION - <topic>',
+                        # so slicing up to the index of the first '-' will give us XX, aka the
+                        # number of points this question is worth
+                        Temp.append(int(Text[i][:Text[i].find('-')]))
 
-                    if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) != None:
+                    # SNAPSTART, SNAPOUT, SPECIAL, CHAIN SNAPPERS questions don't need a <???> field
+                    # TODO: What is this for?
+                    if re.compile('.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(question_type) is not None:
                         Temp.append('')
 
-                    # WHO/WHAT AM I
+                    # WHO/WHAT AM I questions need a field that tells
+                    # whether it's a WHO AM I or a WHAT AM I question
                     else:
-                        Temp[-1] = 'WHO/WHAT AM I'
+                        Temp[0] = 'WHO/WHAT AM I'
                         if type_[:3] == 'WHO':
                             Temp.append('WHO')
                         else:
                             Temp.append('WHAT')
 
-                # This handles the tiebreakers. Since the tiebreaker line has a '-' in it, we just treat this as a special case.
+                # This is for TIE-BREAKERS. (I don't think this works?)
                 except ValueError:
                     Temp = [ Text[i][:-1] ]
                     Temp.append(10)
-            
 
-        # question line
+
+        # A sub-question. (eg. `12. What's the deal with airline peanuts?')
         elif question_line.match(Text[i]):
+            # WHO/WHAT AM I questions' sub-question is just an
+            # explanation of how WHO/WHAT AM I questions work,
+            # so we skip them
             if Temp[0] != 'WHO/WHAT AM I':
+                # Otherwise, we just grab the actual
+                # question text from the line
                 dot_idx = Text[i].find('.')
                 Temp.append(Text[i][dot_idx+2:-1])
 
-                # multiline questions
-                # we stop reading once we see an answer
+                # Multiline questions
+                # We stop reading once we see an answer line
                 r = read_multiline(Text, i+1, answer_regex)
                 Temp[-1] += r[0]
                 i = r[1]
 
-                if scramble_question.match(Temp[-1]) != None:
+                # SCRAMBLE questions have some extra stuff
+                if scramble_question.match(Temp[-1]) is not None:
                     Temp[-1] = ''.join(Temp[-1].split(' ')).replace(',','').replace('.','')
 
-        # clue line
+        # A clue line. (eg. `CLUE B: I am very cool. WHO AM I?')
+        # These are only used for WHO/WHAT AM I questions
         elif clue_line.match(Text[i]):
+            # Grab the clue text
             Temp.append(Text[i][8:-1])
 
-            # multiline clues
-            # we stop reading once we see another clue or an answer
+            # Multiline clues
+            # We stop reading once we see another clue or an answer
             r = read_multiline(Text, i+1, clue_regex + '|' + answer_regex)
             Temp[-1] += r[0]
             i = r[1]
 
-        # answer line
+        # An answer line. (eg. `A. FAT ALBERT')
         elif answer_line.match(Text[i]):
+            # Grab the answer text
             Temp.append(Text[i][3:-1])
+            # Increment the question count for this question
             question_count += 1
 
+            # Multiline answers.
+            # We stop reading once we see another sub-question or a new question
             r = read_multiline(Text, i+1, question_regex + '|' + new_question_regex )
             Temp[-1] += r[0]
             i = r[1]
 
-            if scramble_answer.match(Temp[-1]) != None:
+            # SCRAMBLE questions have some extra stuff
+            if scramble_answer.match(Temp[-1]) is not None:
                 Temp[-1] = Temp[-1].split(' or ')[1:]
-            
-        
-        
-    if len(Temp) > 0 and Temp[0] == 'OPEN QUESTION':
-        Temp.insert(3, question_count)
-    Mainlist.append(Temp)
-        
 
-    # remove empty lists from Mainlist
+    # END PARSING LOOP        
+
+    # Add the final question to the mainlist
+
+    # SNAPSTART, SNAPOUT, SPECIAL, CHAIN SNAPPERS are treated the same as OPEN questions
+    # TODO: Are there other question types that need this?
+    if len(Temp) > 0 and re.compile('.*OPEN|.*SNAPSTART|.*SNAPOUT|.*SPECIAL|.*CHAIN SNAPPERS').match(Temp[0]) is not None:
+        # OPEN questions need a question count
+        Temp.insert(3, question_count)
+        Temp[0] = 'OPEN QUESTION'
+
+    # Remove leading/trailing spaces
+    new_temp = []
+    for thing in Temp:
+        new_temp.append(thing.strip().rstrip() if isinstance(thing, str) else thing)
+
+    # Add the previously parsed question to the question list
+    Mainlist.append(new_temp)
+
+
+    # Remove empty lists from Mainlist
     try:
         while True:
             Mainlist.remove([])
     except ValueError:
         pass
 
+    # Close the parsed file
     File.close()
 
     return Mainlist
+# END `parse` FUNCTION
 
-
-#    for m in Mainlist:
-#        for i in m:
-#            print(i)
-#        print()
 
 
 if __name__ == '__main__':
-    parse('test.txt')
+    out = parse('test.txt')
+    for m in out:
+        for i in m:
+            print(i)
+        print()
+
