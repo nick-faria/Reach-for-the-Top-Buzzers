@@ -29,7 +29,7 @@ def parse(filename):
 
         def is_footer(text):
             """ Returns True if 'text' is a PDF page footer. """
-            footer = re.compile('.*REACH.*FOR.*THE.*TOP|.*SCHOOLREACH.*PACK.*|Page.*[0-9]+.*of.*[0-9]+')
+            footer = re.compile('.*REACH.*FOR.*THE.*TOP|.*SCHOOLREACH.*PACK.*|Page.*of.*')
             if footer.match(text) == None:
                 return False
             else:
@@ -174,8 +174,7 @@ def parse(filename):
 
                     # WHO/WHAT AM I questions need a field that tells
                     # whether it's a WHO AM I or a WHAT AM I question
-                    else:
-                        Temp[0] = 'WHO/WHAT AM I'
+                    if Temp[0] == 'WHO/WHAT AM I':
                         if type_[:3] == 'WHO':
                             Temp.append('WHO')
                         else:
@@ -273,9 +272,8 @@ def parse(filename):
 
 
 if __name__ == '__main__':
-    out = parse('test.txt')
-    for m in out:
-        for i in m:
-            print(i)
-        print()
-
+    out = parse('_tset.txt')
+##    for m in out:
+##        for i in m:
+##            print(i)
+##        print()
